@@ -20,7 +20,10 @@ impl Interpreter {
             Expr::Identifier(ident) => {
                 match self.symbol_table.get(&ident) {
                     Some(value) => Ok(value.clone()),
-                    None => Err(anyhow::anyhow!("Undefined variable: {}", ident)),
+                    None =>{
+                        println!("Symbol table: {:?}", self.symbol_table);
+                        Err(anyhow::anyhow!("Undefined variable: {}", ident))
+                    },
                 }
             },
             Expr::Infix(left, op, right) => {
@@ -50,6 +53,62 @@ impl Interpreter {
             },
             Expr::Char(c) => Ok(Value::Char(c)),
             Expr::String(s) => Ok(Value::Str(s)),
+            Expr::Call(name, args) => {
+                let function = match self.symbol_table.get(&name) {
+                    Some(value) => value,
+                    None => return Err(anyhow::anyhow!("Undefined function: {}", name)),
+                };
+                match function.clone() {
+                    Value::Function(params, body) => {
+                        if params.len() != args.len() {
+                            panic!("Function {} expects {} parameters, but got {}.", name, params.len(), args.len());
+                        }
+            
+                        // Create a new scope
+                        let old_env = self.symbol_table.clone();
+                        
+                        // Bind arguments to parameters
+                        for (param, arg) in params.iter().zip(args.iter()) {
+                            let arg_value = self.visit_expr(arg.clone())?;
+                            self.symbol_table.insert(param.clone(), arg_value);
+                        }
+            
+                        // Execute the body
+                        let mut last_value = Value::Number(0); // Default value
+                        for stmt in &body {
+                            let res = self.visit_stmt(stmt.clone())?;
+                            last_value = Value::Str(res);
+                        }
+            
+                        // Restore the old scope
+                        self.symbol_table = old_env;
+            
+                        Ok(last_value) 
+                    },
+                    _ => panic!("Not a function: {}", name),
+                }
+            },
+            //Expr::Call(ident, args) => {
+            //    let func = self.symbol_table.get(&ident).ok_or(anyhow::anyhow!("Undefined function: {}", ident))?;
+            //    if let Value::Function(params, body) = func {
+            //        if params.len() != args.len() {
+            //            return Err(anyhow::anyhow!("Function {} expects {} arguments, but {} arguments were given", ident, params.len(), args.len()));
+            //        }
+            //        let mut new_env = self.symbol_table.clone();
+            //        for (param, arg) in params.iter().zip(args.iter()) {
+            //            new_env.insert(param.clone(), self.visit_expr(arg.clone())?);
+            //        }
+            //        let mut interpreter = Interpreter {
+            //            symbol_table: new_env,
+            //        };
+            //        let mut result = Value::Number(0);
+            //        for stmt in body {
+            //            result = Value::Str(interpreter.visit_stmt(stmt.clone())?);
+            //        }
+            //        return Ok(result);
+            //    }
+            //    Err(anyhow::anyhow!("Expected function, found {}", func.type_name()))
+            //},
         }
     }
 
@@ -67,7 +126,7 @@ impl Interpreter {
                 Ok(format!("{}",  self.visit_expr(expr)?))
             },
             Stmt::Function(name, params, body) => {
-                self.symbol_table.insert(name.clone(), Value::Function(params.clone(), body.clone()));
+                self.symbol_table.insert(name.clone(), Value::Function(params, body));
                 Ok(format!("Function defined: {}", name))
             },
         }
@@ -94,7 +153,16 @@ impl std::fmt::Display for Value {
             Value::Number(n) => write!(f, "{}", n),
             Value::Str(s) => write!(f, "{}", s),
             Value::Char(c) => write!(f, "{}", c),
-            Value::Function(..) => write!(f, "<function>"),
+            Value::Function(
+                params,
+                body,
+            ) => write!(f, "fn({}) {{\n{}\n}}", params.join(", "), body.iter().map(|stmt| {
+                if let Stmt::Expr(expr) = stmt {
+                    format!("{}", expr)
+                } else {
+                    format!("{:?}", stmt)
+                }
+            }).collect::<Vec<String>>().join("\n")),
         }
     }
 }
@@ -109,121 +177,3 @@ impl Value {
         }
     }
 }
-
-
-//impl Interpreter {
-//    pub fn new() -> Self {
-//        Self {
-//            symbol_table: HashMap::new(),
-//        }
-//    }
-//
-//    pub fn get_stacktrace(&self) -> String {
-//        self.symbol_table.iter().map(|(k, v)| format!("{}: {} = {}", k, v.type_name(), v)).collect::<Vec<String>>().join("\n")
-//    }
-//
-//    pub fn interpret(&mut self, program: Vec<Stmt>) -> anyhow::Result<String> {
-//        let mut output = String::new();
-//        for stmt in program {
-//            output.push_str(&self.visit_stmt(stmt)?);
-//            output.push('\n');
-//        }
-//        Ok(output)
-//    }
-//
-//    pub fn visit_function_def(&mut self, name: String, params: Vec<String>, body: Vec<Stmt>) -> anyhow::Result<String> {
-//        // Store the function in the symbol table
-//        self.symbol_table.insert(name.clone(), Value::Function(params, body));
-//        Ok(format!("Defined function {}", name))
-//    }
-//
-//    pub fn visit_function_call(&mut self, name: String, args: Vec<Expr>) -> anyhow::Result<String> {
-//        // Get a clone of the function
-//        let func = match self.symbol_table.get(&name) {
-//            Some(Value::Function(params, body)) => Ok((params.clone(), body.clone())),
-//            Some(_) => Err(anyhow::anyhow!("{} is not a function", name)),
-//            None => Err(anyhow::anyhow!("Undefined function {}", name)),
-//        }?;
-//    
-//        // Now that we have the function, we can map over the args
-//        let arg_values: Result<Vec<_>, _> = args.clone().into_iter().map(|arg| self.visit_expr(arg)).collect();
-//        let arg_values = arg_values?;
-//    
-//        let (params, body) = func; // Extract values from tuple
-//    
-//        // Check argument count
-//        if params.len() != args.len() {
-//            return Err(anyhow::anyhow!("Incorrect argument count for function {}", name));
-//        }
-//        // Create a new scope and add the parameters to it
-//        let mut new_scope = self.symbol_table.clone();
-//        for (param, arg_value) in params.iter().zip(arg_values.iter()) {
-//            new_scope.insert(param.clone(), arg_value.clone());
-//        }
-//        // Execute the function in the new scope
-//        let old_symbol_table = std::mem::replace(&mut self.symbol_table, new_scope);
-//        let result = self.interpret(body);
-//        self.symbol_table = old_symbol_table;
-//        result
-//    }
-//    
-//
-//    pub fn visit_stmt(&mut self, stmt: Stmt) -> anyhow::Result<String> {
-//        match stmt {
-//            Stmt::Let(ident, expr) => {
-//                let variable = ident.clone();
-//                let value = self.visit_expr(expr)?;
-//                self.symbol_table.insert(ident, value.clone());
-//               Ok(format!("{}: {} = {}", variable, value.type_name(), value))
-//            },
-//            Stmt::Expr(expr) => {
-//                let value = self.visit_expr(expr)?;
-//                Ok(format!("=> {}", value))
-//            },
-//            Stmt::Return(expr) => {
-//                let value = self.visit_expr(expr)?;
-//                Ok(format!("=> {}", value))
-//            },
-//            Stmt::Function(name, params, body) => 
-//            {  
-//                let value = self.visit_function_def(name, params, body)?;
-//                Ok(format!("=> {}", value))}
-//            }
-//    }
-//
-//    pub fn visit_expr(&mut self, expr: Expr) -> anyhow::Result<Value> {
-//        match expr {
-//            Expr::Number(n) => Ok(Value::Number(n)),
-//            Expr::Identifier(ident) => {
-//                match self.symbol_table.get(&ident) {
-//                    Some(value) => Ok(value.clone()),
-//                    None => Err(anyhow::anyhow!("Variable {} not found", ident)),
-//                }
-//            },
-//            Expr::Infix(left, op, right) => {
-//                let left_value = self.visit_expr(*left)?;
-//                let right_value = self.visit_expr(*right)?;
-//    
-//                // For numerical operations
-//                if let (Value::Number(left), Value::Number(right)) = (&left_value, &right_value) {
-//                    return match op.as_str() {
-//                        "+" => Ok(Value::Number(left + right)),
-//                        "-" => Ok(Value::Number(left - right)),
-//                        "*" => Ok(Value::Number(left * right)),
-//                        "/" => Ok(Value::Number(left / right)),
-//                        _ => Err(anyhow::anyhow!("Unexpected operator: {}", op)),
-//                    };
-//                }
-//    
-//                // For string concatenation
-//                if op == "+" {
-//                    return Ok(Value::Str(format!("{}{}", left_value, right_value)));
-//                }
-//    
-//                Err(anyhow::anyhow!("Invalid operation: {} {} {}", left_value, op, right_value))
-//            },
-//            Expr::Char(c) => Ok(Value::Char(c)),
-//            Expr::String(s) => Ok(Value::Str(s)),
-//        }
-//    }
-//}

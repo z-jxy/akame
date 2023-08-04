@@ -4,7 +4,7 @@ use nom::branch::alt;
 use nom::bytes::complete::{tag, take_until};
 use nom::character::complete::{alpha1, alphanumeric1, multispace0, char, alphanumeric0, anychar};
 use nom::combinator::{recognize, map, opt};
-use nom::multi::separated_list0;
+use nom::multi::{separated_list0, many0};
 use nom::sequence::{delimited, tuple, terminated};
 use nom::{IResult, Parser};
 
@@ -19,6 +19,7 @@ impl fmt::Display for Expr {
             Expr::String(s) => write!(f, "String({})", s),
             Expr::Char(c) => write!(f, "Char({})", c),
             Expr::Infix(op, left, right) => write!(f, "Infix({} {} {})", op, left, right),
+            Expr::Call(ident, args) => write!(f, "Call({} {})", ident, args.iter().map(|e| format!("{}", e)).collect::<Vec<String>>().join(", ")),
         }
     }
 }
@@ -34,20 +35,32 @@ fn parse_identifier(input: &str) -> IResult<&str, Expr> {
     )(input)
 }
 
+pub fn get_identifier(e: Expr) -> Option<String> {
+    match e {
+        Expr::Identifier(s) => Some(s),
+        _ => None,
+    }
+}
+
 fn parse_function_declaration(input: &str) -> IResult<&str, Stmt> {
     let (input, _) = tag("fn")(input)?;
+    //println!("it's a function!");
     let (input, _) = multispace0(input)?;
-    let (input, name) = parse_identifier(input)?;
+    let (input, ident) = parse_identifier(input)?;
     let (input, _) = multispace0(input)?;
     let (input, params) = delimited(
         tag("("), 
         separated_list0(tag(","), parse_identifier), 
         tag(")")
     )(input)?;
-    // Assuming the function's body is a single statement for simplicity
-    // You'll need to modify this to parse multiple statements
-    let (input, body) = delimited(tag("{"), parse_statement, tag("}"))(input)?;
+    //println!("params: {:?}", params);
+    let (input, _) = multispace0(input)?;
 
+    let (input, body) = delimited(
+        tag("{"), many0(parse_statement), tag("}"))
+        (input)?;
+
+    //println!("body: {:?}", body);
     let params = params.into_iter().map(|expr| {
         if let Expr::Identifier(s) = expr {
             s
@@ -55,8 +68,12 @@ fn parse_function_declaration(input: &str) -> IResult<&str, Stmt> {
             panic!("Expecting identifier in function parameter list")
         }
     }).collect();
-
-    Ok((input, Stmt::Function(name.to_string(), params, vec![body])))
+    
+    println!("successfully parsed function declaration");
+    match get_identifier(ident) {
+        Some(s) => Ok((input, Stmt::Function(s, params, body))),
+        None => panic!("Expecting identifier in function declaration"),
+    }
 }
 
 
@@ -69,6 +86,16 @@ fn parse_string(input: &str) -> IResult<&str, Expr> {
     let (input, s) = delimited(char('"'), take_until("\""), char('"'))(input)?;
     Ok((input, Expr::String(s.to_string())))
 }
+
+fn parse_function_call(input: &str) -> IResult<&str, Expr> {
+    let (input, name) = parse_identifier(input)?;
+    println!("function name: {}", name);
+    let (input, args) = delimited(tag("("), separated_list0(tag(","), expr), tag(")"))(input)?;
+    println!("calling function {} with args {:?}", name, args);
+    let id = get_identifier(name).unwrap();
+    Ok((input, Expr::Call(id, args)))
+}
+
 
 fn parse_char(input: &str) -> IResult<&str, Expr> {
     delimited(tag("'"), anychar, tag("'"))
@@ -97,6 +124,8 @@ fn parse_infix_expr(input: &str) -> IResult<&str, Expr> {
     ))(input)?;
     let (input, _) = multispace0(input)?;
     let (input, right) = parse_primary_expr(input)?;
+    let (input, _) = multispace0(input)?;
+    let (input, _) = opt(tag(";"))(input)?;
     Ok((input, Expr::Infix(Box::new(left), op.to_string(), Box::new(right))))
 }
 
@@ -115,8 +144,6 @@ fn parse_primary_expr(input: &str) -> IResult<&str, Expr> {
         delimited(tag("("), expr, tag(")")),
     ))(input)
 }
-
-
 
 fn parse_let_statement(input: &str) -> IResult<&str, Stmt> {
     map(
@@ -155,6 +182,7 @@ fn parse_return_statement(input: &str) -> IResult<&str, Stmt> {
 
 fn expr(input: &str) -> IResult<&str, Expr> {
     alt((
+        parse_function_call,
         parse_infix_expr,
         parse_primary_expr,
     ))(input)
@@ -162,7 +190,6 @@ fn expr(input: &str) -> IResult<&str, Expr> {
 
 fn parse_expr_statement(input: &str) -> IResult<&str, Stmt> {
     let (input, expr) = expr(input)?;
-    //let (input, _) = tag(";")(input)?;
     Ok((input, Stmt::Expr(expr)))
 }
 
@@ -172,7 +199,8 @@ fn parse_statement(input: &str) -> IResult<&str, Stmt> {
         parse_let_statement,
         parse_return_statement,
         parse_function_declaration,
-        parse_expr_statement
+        parse_expr_statement,
+        
     ))(input)
 }
 

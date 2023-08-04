@@ -63,6 +63,7 @@ pub enum Expr {
     String(String),
     Identifier(String),
     Infix(Box<Expr>, String, Box<Expr>),
+    Call(String, Vec<Expr>),
 }
 
 #[derive(Debug, Clone)]
