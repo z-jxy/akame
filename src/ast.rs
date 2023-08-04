@@ -65,15 +65,6 @@ pub enum Expr {
     Infix(Box<Expr>, String, Box<Expr>),
 }
 
-impl Expr {
-    pub fn get_identifier(&self) -> Option<&String> {
-        match self {
-            Expr::Identifier(id) => Some(id),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Let(String, Expr),
