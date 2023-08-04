@@ -1,10 +1,20 @@
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
-    LeftParen,
-    RightParen,
+    Let,
+    Fn,
+    Return,
+    Identifier(String),
+    Number(i32),
     Plus,
     Minus,
     Multiply,
     Divide,
-    Number(i32),
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    Semicolon,
+    Equal,
+    EOF,
 }
