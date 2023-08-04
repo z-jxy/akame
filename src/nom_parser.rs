@@ -2,11 +2,11 @@ use std::fmt;
 
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_until};
-use nom::character::complete::{alpha1, alphanumeric1, multispace0, char, alphanumeric0};
-use nom::combinator::recognize;
+use nom::character::complete::{alpha1, alphanumeric1, multispace0, char, alphanumeric0, anychar};
+use nom::combinator::{recognize, map};
 use nom::multi::separated_list0;
-use nom::sequence::{delimited, separated_pair, tuple};
-use nom::IResult;
+use nom::sequence::{delimited, separated_pair, tuple, pair};
+use nom::{IResult, Parser};
 
 use crate::ast::{Expr, Stmt};
 
@@ -17,16 +17,16 @@ impl fmt::Display for Expr {
             Expr::Identifier(s) => write!(f, "Identifier({})", s),
             Expr::Number(n) => write!(f, "Number({})", n),
             Expr::String(s) => write!(f, "String({})", s),
+            Expr::Char(c) => write!(f, "Char({})", c),
+            Expr::Infix(op, left, right) => write!(f, "Infix({} {} {})", op, left, right),
             // Add all other variants of your Expr enum here...
             _ => write!(f, "Other Expr variant"),
         }
     }
 }
-
 fn parse_identifier(input: &str) -> IResult<&str, Expr> {
-    map(recognize(pair(alpha1, alphanumeric0)), |s: &str| {
-        Expr::Identifier(s.to_string())
-    })(input)
+    let (input, ident) = recognize(pair(alpha1, alphanumeric0))(input)?;
+    Ok((input, Expr::Identifier(ident.to_string())))
 }
 
 fn parse_function_declaration(input: &str) -> IResult<&str, Stmt> {
@@ -65,18 +65,74 @@ fn parse_string(input: &str) -> IResult<&str, Expr> {
     Ok((input, Expr::String(s.to_string())))
 }
 
-fn parse_expr(input: &str) -> IResult<&str, Expr> {
-    alt((parse_number, parse_string, parse_identifier))(input)
+fn parse_char(input: &str) -> IResult<&str, Expr> {
+    delimited(tag("'"), anychar, tag("'"))
+        .map(|c| Expr::Char(c))
+        .parse(input)
 }
+
+//fn parse_paren_expr(input: &str) -> IResult<&str, Expr> {
+//    delimited(tag("("), expr, tag(")"))(input)
+//}
+
+fn parse_infix_expr(input: &str) -> IResult<&str, Expr> {
+    let (input, left) = parse_primary_expr(input)?;
+    println!("left: {}", left);
+    // trim whitespace
+    let (input, _) = multispace0(input)?;
+    let (input, op) = alt((
+        tag("+"),
+        tag("-"),
+        tag("*"),
+        tag("/"),
+        tag("=="),
+        tag("!="),
+        tag("<"),
+        tag(">"),
+        tag("<="),
+        tag(">="),
+    ))(input)?;
+    println!("op: {}", op);
+    let (input, _) = multispace0(input)?;
+    let (input, right) = parse_primary_expr(input)?;
+    println!("left: {}, op: {}, right: {}", left, op, right);
+    //Ok((input, Expr::Infix(Box::new(left), op.to_string(), Box::new(right))))
+    return Ok((input, Expr::Infix(Box::new(left), op.to_string(), Box::new(right))))
+}
+
+//fn parse_terminated_expr(input: &str) -> IResult<&str, Expr> {
+//    let (input, expr) = parse_expr(input)?;
+//    let (input, _) = tag(";")(input)?;
+//    Ok((input, expr))
+//}
+
+fn parse_primary_expr(input: &str) -> IResult<&str, Expr> {
+    alt((
+        parse_identifier,
+        parse_number,
+        parse_string,
+        parse_char,
+        delimited(tag("("), expr, tag(")")),
+    ))(input)
+}
+
+
 
 fn parse_let_statement(input: &str) -> IResult<&str, Stmt> {
     let (input, _) = tag("let")(input)?;
     let (input, _) = multispace0(input)?;
-    let (input, id) = parse_identifier(input)?;
+    let (input, _id) = parse_identifier(input)?;
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("=")(input)?;
     let (input, _) = multispace0(input)?;
-    let (input, expr) = parse_expr(input)?;
+    let (input, expr) = expr(input)?;
+    
+    let id = if let Expr::Identifier(s) = _id {
+        s
+    } else {
+        panic!("Expecting identifier in let statement")
+    };
+    println!("id: {}, expr: {}", id, expr);
 
     Ok((input, Stmt::Let(id.to_string(), expr)))
 }
@@ -84,23 +140,34 @@ fn parse_let_statement(input: &str) -> IResult<&str, Stmt> {
 fn parse_return_statement(input: &str) -> IResult<&str, Stmt> {
     let (input, _) = tag("return")(input)?;
     let (input, _) = multispace0(input)?;
-    let (input, expr) = parse_expr(input)?;
+    let (input, expr) = expr(input)?;
 
     Ok((input, Stmt::Return(expr)))
 }
 
+
+fn expr(input: &str) -> IResult<&str, Expr> {
+    alt((
+        parse_infix_expr,
+        parse_primary_expr,
+    ))(input)
+}
+
 fn parse_expr_statement(input: &str) -> IResult<&str, Stmt> {
-    let (input, expr) = parse_expr(input)?;
+    let (input, expr) = expr(input)?;
+    //let (input, _) = tag(";")(input)?;
+    println!("!expr: {}!", expr);
     Ok((input, Stmt::Expr(expr)))
 }
+
 
 fn parse_statement(input: &str) -> IResult<&str, Stmt> {
     alt((
         parse_let_statement,
-         parse_return_statement,
-          parse_function_declaration,
-           parse_expr_statement
-        ))(input)
+        parse_return_statement,
+        parse_function_declaration,
+        parse_expr_statement
+    ))(input)
 }
 
 pub fn parse_program(input: &str) -> IResult<&str, Vec<Stmt>> {

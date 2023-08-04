@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{Stmt, Expr, FunctionLiteral};
+use crate::{ast::{Stmt, Expr}, tokens::Token};
 
 pub struct Interpreter {
     pub symbol_table: HashMap<String, Value>,
@@ -19,12 +19,15 @@ impl Interpreter2 {
     }
 
     pub fn visit_expr(&mut self, expr: Expr) -> anyhow::Result<Value> {
+        //println!("Environment: {:?}", self.environment);
         match expr {
             Expr::Number(n) => Ok(Value::Number(n)),
             Expr::Identifier(ident) => {
+                println!("Looking up variable: {}", ident);
+                println!("Environment: {:?}", self.environment);
                 match self.environment.get(&ident) {
                     Some(value) => Ok(value.clone()),
-                    None => Err(anyhow::anyhow!("Variable {} not found", ident)),
+                    None => Err(anyhow::anyhow!("Undefined variable: {}", ident)),
                 }
             },
             Expr::Infix(left, op, right) => {
@@ -51,15 +54,26 @@ impl Interpreter2 {
             },
             Expr::Char(c) => Ok(Value::Char(c)),
             Expr::String(s) => Ok(Value::Str(s)),
+            _ => Err(anyhow::anyhow!("Unsupported expression: {:?}", expr)),
         }
     }
 
     pub fn visit_stmt(&mut self, stmt: Stmt) -> anyhow::Result<String> {
         match stmt {
-            Stmt::Let(id, expr) => {
+            Stmt::Let(ident, expr) => {
+                let variable = ident.clone();
+                let id = if let Token::Identifier(s) = Token::Identifier(ident.clone()) {
+                    println!("idd: {:?}", s);
+                    s.clone()
+                } else {
+                    panic!("Expected identifier, got {:?}", ident);
+                };
+                println!("id: {:?}", id);
+                println!("expr: {:?}", expr);
                 let value = self.visit_expr(expr)?;
-                self.environment.insert(id.clone(), value.clone());
-                Ok(format!("{}: {} = {}", id, value.type_name(), value))
+                println!("value: {:?}", value);
+                self.environment.insert(ident, value.clone());
+                Ok(format!("{}: {} = {}", variable, value.type_name(), value))
             },
             Stmt::Expr(expr) => {
                 let value = self.visit_expr(expr)?;
