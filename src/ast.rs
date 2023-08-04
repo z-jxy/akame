@@ -6,6 +6,7 @@ pub enum ASTNode {
     StatementNode { statement: Statement },
     ExpressionNode { expression: Expression },
     BinaryOpNode { op: BinaryOp, left: Box<ASTNode>, right: Box<ASTNode> },
+    CharacterNode { value: char },
 }
 
 pub struct StatementNode {
@@ -21,14 +22,14 @@ pub enum BinaryOp {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Statement {
     Let { name: String, value: Expression },
     Return { value: Expression },
     Expression { value: Expression },
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     Identifier { value: String },
     Number { value: i32 },
@@ -44,13 +45,13 @@ pub enum Expression {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FunctionLiteral {
     parameters: Vec<String>,
     body: BlockStatement,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct BlockStatement {
     statements: Vec<Statement>,
 }
@@ -58,6 +59,7 @@ pub struct BlockStatement {
 #[derive(Debug, Clone)]
 pub enum Expr {
     Number(i32),
+    Char(char),
     String(String),
     Identifier(String),
     Infix(Box<Expr>, String, Box<Expr>),
@@ -68,4 +70,5 @@ pub enum Stmt {
     Let(String, Expr),
     Expr(Expr),
     Return(Expr),  
+    Function(String, Vec<String>, Vec<Stmt>),
 }

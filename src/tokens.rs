@@ -1,9 +1,12 @@
+use crate::ast::FunctionLiteral;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Let,
     Fn,
     Return,
     Identifier(String),
+    Char(char),
     String(String),
     Number(i32),
     Plus,
@@ -18,4 +21,5 @@ pub enum Token {
     Semicolon,
     Equal,
     EOF,
+    ILLEGAL,
 }

@@ -6,8 +6,9 @@ mod tokens;
 mod ast;
 mod interpreter;
 mod repl;
+mod nom_parser;
 fn main() {
-    if let Err(err) = repl::interactive() {
+    if let Err(err) = repl::interactive2() {
         eprintln!("Error in main: {:?}", err);
     }
 }

@@ -1,13 +1,28 @@
 use crate::tokens::Token;
+use anyhow::anyhow;
 
+#[derive(Clone)]
 pub struct Lexer<'a> {
     input: &'a str,
     pos: usize,
+    current_char: Option<char>,
+}
+
+pub enum LexerError {
+    UnexpectedCharacter(char),
+    UnexpectedEndOfInput,
+    IllegalToken,
 }
 
 impl<'a> Lexer<'a> {
+    pub fn peek_next_token(&mut self) -> Token {
+        let mut temp_lexer = self.clone();
+        temp_lexer.get_next_token()
+    }
+
     pub fn new(input: &'a str) -> Self {
-        Self { input, pos: 0 }
+        let current_char = input.chars().next();
+        Self { input, pos: 0, current_char }
     }
 
     fn skip_whitespace(&mut self) {
@@ -20,20 +35,26 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    //fn string(&mut self) -> anyhow::Result<()> {
-    //    self.consume('"')?;  // Consume the opening quote
-    //    let start = self.pos;
-    //    while let Some(&ch) = self.chars.peek() {
-    //        if ch == '"' {
-    //            break;
-    //        }
-    //        self.next_char()?;
-    //    }
-    //    let string = self.input[start..self.pos].to_string();
-    //    self.consume('"')?;  // Consume the closing quote
-    //    self.tokens.push(Token::String(string));
-    //    Ok(())
-    //}
+    fn advance(&mut self) {
+        self.current_char = self.input.chars().nth(self.pos);
+        self.pos += 1;
+    }
+
+    fn string(&mut self) -> anyhow::Result<Token> {
+        let mut string = String::new();
+        while let Some(c) = self.input.chars().nth(self.pos) {
+            if c == '"' {
+                // End of the string, increment pos to skip the ending quote and break
+                self.pos += 1;
+                return Ok(Token::String(string));
+            } else {
+                // Add character to the string and increment pos
+                string.push(c);
+                self.pos += 1;
+            }
+        }
+        Err(anyhow!("Unexpected end of input while parsing string"))
+    }
     
 
     pub fn get_next_token(&mut self) -> Token {
@@ -41,11 +62,12 @@ impl<'a> Lexer<'a> {
         if self.pos >= self.input.len() {
             return Token::EOF;
         }
+
+        self.advance();
     
-        let c = self.input.chars().nth(self.pos).unwrap();
-        self.pos += 1;
+        let c = self.current_char.unwrap();
     
-        match c {
+        match self.current_char.unwrap() {
             '(' => Token::LeftParen,
             ')' => Token::RightParen,
             '{' => Token::LeftBrace,
@@ -58,21 +80,22 @@ impl<'a> Lexer<'a> {
             '=' => Token::Equal,
             ',' => Token::Comma,
             '"' => {
-                // Collect the string
-                let mut string = String::new();
-                while let Some(c) = self.input.chars().nth(self.pos) {
-                    if c == '"' {
-                        // End of the string, increment pos to skip the ending quote and break
-                        self.pos += 1;
-                        break;
-                    } else {
-                        // Add character to the string and increment pos
-                        string.push(c);
-                        self.pos += 1;
+                match self.string() {
+                    Ok(token) => token,
+                    Err(e) => {
+                        println!("{}", e);
+                        Token::ILLEGAL
                     }
                 }
-                Token::String(string)
             },
+            // support for chars
+            '\'' => match self.character() {
+                Ok(token) => token,
+                Err(e) => {
+                    println!("{}", e);
+                    Token::ILLEGAL
+                }
+            }
             'a'..='z' | 'A'..='Z' | '_' => {
                 let mut id = c.to_string();
                 while let Some(c) = self.input.chars().nth(self.pos) {
@@ -108,6 +131,35 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn character(&mut self) -> Result<Token, anyhow::Error> {
+        self.advance(); // Skip the starting quote
+
+        // Get the character
+        let mut c = self.current_char.ok_or(anyhow::anyhow!("Unexpected end of input"))?;
+        if c == '\'' {
+            return Err(anyhow::anyhow!("Character literal must contain a character. To represent a single quote, escape it using a backslash: \\'"));
+        }
+
+        if c == '\\' {
+                self.advance(); // Skip the backslash
+                let escape_char = self.current_char.ok_or(anyhow::anyhow!("Unexpected end of input"))?;
+                let final_char = match escape_char {
+                    '\'' => '\'',
+                    '\\' => '\\',
+                    _ => return Err(anyhow::anyhow!("Invalid escape sequence")),
+                };
+                c = final_char;
+        }
+        // Check for end quote
+        self.advance(); // Move to the end quote
+        if self.current_char != Some('\'') {
+            println!("Unexpected value at end of character literal. '{}'", self.current_char.unwrap());
+            return Err(anyhow::anyhow!("Character literal must be closed"));
+        }
+
+        Ok(Token::Char(c))
+    }
+
     fn identifier(&mut self) -> Token {
         let start = self.pos;
         while let Some(ch) = self.input.chars().nth(self.pos) {
@@ -122,7 +174,11 @@ impl<'a> Lexer<'a> {
         match value.as_str() {
             "let" => Token::Let,
             "return" => Token::Return,
+            "fn" => Token::Fn,
             _ => Token::Identifier(value),
         }
     }
+
+
 }
+
