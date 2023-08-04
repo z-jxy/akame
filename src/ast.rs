@@ -1,5 +1,7 @@
 pub enum ASTNode {
     NumberNode { value: i32 },
+    IdentifierNode { value: String },
+    StringNode { value: String },
     ProgramNode { statements: Vec<StatementNode> },
     StatementNode { statement: Statement },
     ExpressionNode { expression: Expression },
@@ -56,6 +58,7 @@ pub struct BlockStatement {
 #[derive(Debug, Clone)]
 pub enum Expr {
     Number(i32),
+    String(String),
     Identifier(String),
     Infix(Box<Expr>, String, Box<Expr>),
 }

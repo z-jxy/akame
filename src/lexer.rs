@@ -19,6 +19,21 @@ impl<'a> Lexer<'a> {
             }
         }
     }
+
+    //fn string(&mut self) -> anyhow::Result<()> {
+    //    self.consume('"')?;  // Consume the opening quote
+    //    let start = self.pos;
+    //    while let Some(&ch) = self.chars.peek() {
+    //        if ch == '"' {
+    //            break;
+    //        }
+    //        self.next_char()?;
+    //    }
+    //    let string = self.input[start..self.pos].to_string();
+    //    self.consume('"')?;  // Consume the closing quote
+    //    self.tokens.push(Token::String(string));
+    //    Ok(())
+    //}
     
 
     pub fn get_next_token(&mut self) -> Token {
@@ -42,6 +57,22 @@ impl<'a> Lexer<'a> {
             ';' => Token::Semicolon,
             '=' => Token::Equal,
             ',' => Token::Comma,
+            '"' => {
+                // Collect the string
+                let mut string = String::new();
+                while let Some(c) = self.input.chars().nth(self.pos) {
+                    if c == '"' {
+                        // End of the string, increment pos to skip the ending quote and break
+                        self.pos += 1;
+                        break;
+                    } else {
+                        // Add character to the string and increment pos
+                        string.push(c);
+                        self.pos += 1;
+                    }
+                }
+                Token::String(string)
+            },
             'a'..='z' | 'A'..='Z' | '_' => {
                 let mut id = c.to_string();
                 while let Some(c) = self.input.chars().nth(self.pos) {

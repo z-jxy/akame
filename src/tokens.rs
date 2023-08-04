@@ -4,6 +4,7 @@ pub enum Token {
     Fn,
     Return,
     Identifier(String),
+    String(String),
     Number(i32),
     Plus,
     Minus,

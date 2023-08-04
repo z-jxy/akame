@@ -36,6 +36,11 @@ impl<'a> Parser<'a> {
                 self.eat(Token::RightParen)?;
                 Ok(node)
             },
+            Some(Token::String(s)) => {
+                let node = ASTNode::StringNode { value: s.clone() };
+                self.current_token = Some(self.lexer.get_next_token());
+                Ok(node)
+            },
             _ => Err(format!("Unexpected token: {:?}", self.current_token)),
         };
     
@@ -76,6 +81,10 @@ impl<'a> Parser<'a> {
             Some(Token::Number(n)) => {
                 self.eat(Token::Number(n))?;
                 Expr::Number(n)
+            },
+            Some(Token::String(s)) => {
+                self.eat(Token::String(s.clone()))?;
+                Expr::String(s)
             },
             Some(Token::Identifier(s)) => {
                 self.eat(Token::Identifier(s.clone()))?;
