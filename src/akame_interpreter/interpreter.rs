@@ -19,13 +19,14 @@ impl Interpreter {
                 parsed_program.iter().for_each(|stmt| {
                     match self.visit_stmt(stmt) {
                         // we don't print anything since
-                        Ok(result) => {
-                            match result {
-                                Value::Number(n) => println!("=> {}", n),
-                                Value::Str(s) => println!("=> {}", s),
-                                Value::None => (),
-                                _ => todo!("Implement display for other types"),
-                            }
+                        Ok(_) => {
+                            //match result {
+                            //    Value::Number(n) => (),
+                            //    Value::Str(s) => (),
+                            //    Value::None => (),
+                            //    Value::Return(value) => println!("=> {}", value),
+                            //    _ => todo!("Implement display for other types"),
+                            //}
                         }
                         Err(err) => eprintln!("Interpreter error: {}", err),
                     }
@@ -113,10 +114,13 @@ impl Interpreter {
     }
 
     fn call_function(&mut self, name: &str, args: &[Expression]) -> anyhow::Result<Value> {
+        //println!("calling function: {}", name);
         match name {
-            "print" => {
+            "println!" => {
+                //println!("calling println!");
                 if let Some(arg) = args.get(0) {
                     let value = self.visit_expr(arg)?;
+                    println!("about to print: {:?}", value);
                     match value {
                         Value::Str(s) => {
                             println!("{:?}", s);
@@ -126,7 +130,7 @@ impl Interpreter {
                             println!("{}", n);
                             Ok(Value::None)
                         },
-                        _ => Err(anyhow::anyhow!("Expected string argument to print"))
+                        x => Err(anyhow::anyhow!("Expected string argument to print. Got: {:?}", x)),
                     }
                 } else {
                     Err(anyhow::anyhow!("print function expects at least one argument"))
@@ -151,13 +155,12 @@ impl Interpreter {
                                         let arg_value = self.visit_expr(&arg);
                                         match arg_value {
                                             Ok(value) => {
-                                                (*self).symbol_table.insert(param.to_owned(), value);
+                                                self.symbol_table.insert(param.to_owned(), value);
                                             },
                                             Err(err) => {
                                                 println!("Error: {}", err);
                                             },
                                         }
-                                        //(*self).symbol_table.insert(param.to_owned(), arg_value);
                                     });
                                     // Execute the body
                                     let mut value = Value::Number(0.into()); // Default value
@@ -167,9 +170,11 @@ impl Interpreter {
                                     // Return the last value
                                     value
                                 };
+                                //println!("ret: {:?} ({})", ret, ret.type_name());
 
                                 self.symbol_table = old_env;
-                                return Ok(ret)
+
+                                return Ok(Value::Return(Box::new(ret)))
                             },
                             Value::None => Ok(Value::None),
                             _ => todo!("Not a function: {}", name)
@@ -223,7 +228,9 @@ impl Interpreter {
             },
 
             Statement::Print(expr) => {
+                //println!("in print statement");
                 let value = self.visit_expr(&expr)?;
+                //println!("got a value from print statement expr: {:?}", value);
                 match value {
                     Value::Str(s) => {
                         println!("{:?}", s);
@@ -233,7 +240,11 @@ impl Interpreter {
                         println!("{}", n);
                         Ok(Value::None)
                     },
-                    _ => Err(anyhow::anyhow!("Expected string argument to print"))
+                    Value::Return(v) => {
+                        println!("{}", v);
+                        Ok(Value::None)
+                    },
+                    x => Err(anyhow::anyhow!("Expected string argument to print. Got: {:?}", x))
                 }
             },
 
@@ -307,6 +318,7 @@ pub enum Value {
     Str(Box<str>),
     Char(char),
     Function(Vec<String>, Vec<Statement>),
+    Return(Box<Value>),
     None,
 
     // You can add more types here in future.
@@ -330,6 +342,7 @@ impl std::fmt::Display for Value {
                 }
             }).collect::<Vec<String>>().join("\n")),
             Value::None => Ok(()),
+            Value::Return(_) => Ok(()),
         }
     }
 }
@@ -342,6 +355,7 @@ impl std::fmt::Display for Value {
 //            Value::Char(_) => "char",
 //            Value::Function(..) => "function",
 //            Value::None => "none",
+//            Value::Return(_) => "return",
 //        }
 //    }
 //}

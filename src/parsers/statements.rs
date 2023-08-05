@@ -6,13 +6,16 @@ use nom::sequence::{delimited, tuple, terminated};
 use nom::IResult;
 
 use crate::ast::{Expression, Statement};
-use super::functions::ws;
-use super::tokens::{parse_identifier, expr};
+
+use super::expressions::expression;
+use super::tokens::parse_identifier;
 
 pub fn parse_print_statement(input: &str) -> IResult<&str, Statement> {
-    let (input, _) = ws(tag("println!"))(input)?;
+    let (input, _) = opt(multispace0)(input)?; // Optional whitespace
+    let (input, _) = tag("println!")(input)?;
     let (input, _) = multispace0(input)?;
-    let (input, expr) = expr(input)?;
+    let (input, expr) = delimited(tag("("), expression, tag(")"))(input)?;
+    //println!("Parsed print statement: {:?}", expr);
     Ok((input, Statement::Print(expr)))
 }
 
@@ -30,12 +33,12 @@ pub fn parse_let_statement(input: &str) -> IResult<&str, Statement> {
             tag("="),
             delimited(
                 opt(multispace0),
-            expr,
+            expression,
             opt(multispace0)
             ),
-            tag(";"),
+
         )),
-        |(_let,  ident,  _assignment_op, expr, _semicolon,)| match ident {
+        |(_let,  ident,  _assignment_op, expr,)| match ident {
             Expression::Identifier(id) => Statement::Let(id.to_string(), expr),
             _ => panic!("Expecting identifier in let statement"),
         }
@@ -45,8 +48,9 @@ pub fn parse_let_statement(input: &str) -> IResult<&str, Statement> {
 pub fn parse_return_statement(input: &str) -> IResult<&str, Statement> {
     let (input, _) = tag("return")(input)?;
     let (input, _) = multispace0(input)?;
-    let (input, expr) = expr(input)?;
+    let (input, expr) = expression(input)?;
     let (input, _) = multispace0(input)?;
     let (input, _) = tag(";")(input)?; // Expecting a semicolon after the expression
     Ok((input, Statement::Return(expr)))
 }
+
