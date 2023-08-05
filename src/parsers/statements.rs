@@ -1,16 +1,11 @@
-use std::fmt;
+use nom::bytes::complete::tag;
+use nom::character::complete::multispace0;
+use nom::combinator::{map, opt};
 
-use nom::branch::alt;
-use nom::bytes::complete::{tag, take_until};
-use nom::character::complete::{alpha1, multispace0, char, alphanumeric0, anychar, digit1};
-use nom::combinator::{recognize, map, opt};
-use nom::multi::{separated_list0, many0};
 use nom::sequence::{delimited, tuple, terminated};
-use nom::{IResult, Parser};
+use nom::IResult;
 
 use crate::ast::{Expression, Statement};
-use crate::types::integer::{parse_large_integer, Integer};
-
 use super::tokens::{parse_identifier, expr};
 
 pub fn parse_let_statement(input: &str) -> IResult<&str, Statement> {

@@ -87,27 +87,6 @@ impl Interpreter {
                     _ => panic!("Not a function: {}", name),
                 }
             },
-            //Expr::Call(ident, args) => {
-            //    let func = self.symbol_table.get(&ident).ok_or(anyhow::anyhow!("Undefined function: {}", ident))?;
-            //    if let Value::Function(params, body) = func {
-            //        if params.len() != args.len() {
-            //            return Err(anyhow::anyhow!("Function {} expects {} arguments, but {} arguments were given", ident, params.len(), args.len()));
-            //        }
-            //        let mut new_env = self.symbol_table.clone();
-            //        for (param, arg) in params.iter().zip(args.iter()) {
-            //            new_env.insert(param.clone(), self.visit_expr(arg.clone())?);
-            //        }
-            //        let mut interpreter = Interpreter {
-            //            symbol_table: new_env,
-            //        };
-            //        let mut result = Value::Number(0);
-            //        for stmt in body {
-            //            result = Value::Str(interpreter.visit_stmt(stmt.clone())?);
-            //        }
-            //        return Ok(result);
-            //    }
-            //    Err(anyhow::anyhow!("Expected function, found {}", func.type_name()))
-            //},
         }
     }
 
@@ -125,8 +104,13 @@ impl Interpreter {
                 Ok(format!("{}",  self.visit_expr(expr)?))
             },
             Statement::Function(name, params, body) => {
+                let output = format!("fn {name}({params}) {{\n  {body}\n  }}", 
+                params=params.join(", "), 
+                body=body.iter().map(|stmt| {
+                    format!("   {}", stmt)
+                }).collect::<Vec<String>>().join("\n"));
                 self.symbol_table.insert(name.clone(), Value::Function(params, body));
-                Ok(format!("Function defined: {}", name))
+                Ok(output)
             },
         }
 }

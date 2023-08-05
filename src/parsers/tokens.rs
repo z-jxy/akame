@@ -1,15 +1,12 @@
-
-use std::fmt;
-
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_until};
 use nom::character::complete::{alpha1, multispace0, char, alphanumeric0, anychar, digit1};
 use nom::combinator::{recognize, map, opt};
-use nom::multi::{separated_list0, many0};
-use nom::sequence::{delimited, tuple, terminated};
+use nom::multi::separated_list0;
+use nom::sequence::{delimited, tuple};
 use nom::{IResult, Parser};
 
-use crate::ast::{Expression, Statement};
+use crate::ast::Expression;
 use crate::types::integer::{parse_large_integer, Integer, try_parse_number};
 
 
@@ -48,7 +45,6 @@ fn parse_number(input: &str) -> IResult<&str, Expression> {
             }
         }
     };
-    println!("successfully num parse: {}", number);
     Ok((input, Expression::Number(number)))
 }
 

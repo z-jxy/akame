@@ -1,16 +1,17 @@
 use std::fmt;
 
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take_until};
-use nom::character::complete::{alpha1, multispace0, char, alphanumeric0, anychar, digit1};
-use nom::combinator::{recognize, map, opt};
+use nom::bytes::complete::tag;
+
+
+use nom::character::streaming::multispace0;
 use nom::multi::{separated_list0, many0};
-use nom::sequence::{delimited, tuple, terminated};
-use nom::{IResult, Parser};
+use nom::sequence::delimited;
+use nom::IResult;
 
 use crate::ast::{Expression, Statement};
 use crate::parsers::tokens::{parse_identifier, get_identifier};
-use crate::types::integer::{parse_large_integer, Integer};
+
 
 use super::statements::{parse_return_statement, parse_let_statement};
 use super::tokens::expr;
@@ -56,7 +57,6 @@ fn parse_function_declaration(input: &str) -> IResult<&str, Statement> {
         }
     }).collect();
     
-    println!("successfully parsed function declaration");
     match get_identifier(ident) {
         Some(s) => Ok((input, Statement::Function(s, params, body))),
         None => panic!("Expecting identifier in function declaration"),
@@ -81,8 +81,4 @@ pub fn parse_statement(input: &str) -> IResult<&str, Statement> {
         parse_expr_statement,
         
     ))(input)
-}
-
-pub fn parse_program(input: &str) -> IResult<&str, Vec<Statement>> {
-    separated_list0(tag(";"), parse_statement)(input)
 }
