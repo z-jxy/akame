@@ -20,7 +20,7 @@ pub fn interactive() -> Result<(), Box<dyn std::error::Error>> {
                 match parse_program(&line) {
                     Ok((_, parsed_program)) => {
                         for stmt in parsed_program {
-                            match interpreter.visit_stmt(stmt) {
+                            match interpreter.visit_stmt(&stmt) {
                                 Ok(result) => println!("=> {}", result),
                                 Err(err) => eprintln!("Interpreter error: {}", err),
                             }

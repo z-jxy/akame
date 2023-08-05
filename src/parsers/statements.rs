@@ -38,6 +38,7 @@ pub fn parse_return_statement(input: &str) -> IResult<&str, Statement> {
     let (input, _) = tag("return")(input)?;
     let (input, _) = multispace0(input)?;
     let (input, expr) = expr(input)?;
-
+    let (input, _) = multispace0(input)?;
+    let (input, _) = tag(";")(input)?; // Expecting a semicolon after the expression
     Ok((input, Statement::Return(expr)))
 }
