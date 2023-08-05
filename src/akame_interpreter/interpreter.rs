@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{Stmt, Expr};
+use crate::{ast::{Statement, Expression}, types::integer::Integer};
 
 pub struct Interpreter {
     symbol_table: HashMap<String, Value>,  // assuming all variables are i32 for simplicity
@@ -13,11 +13,11 @@ impl Interpreter {
         }
     }
 
-    pub fn visit_expr(&mut self, expr: Expr) -> anyhow::Result<Value> {
+    pub fn visit_expr(&mut self, expr: Expression) -> anyhow::Result<Value> {
         //println!("Environment: {:?}", self.environment);
         match expr {
-            Expr::Number(n) => Ok(Value::Number(n)),
-            Expr::Identifier(ident) => {
+            Expression::Number(n) => Ok(Value::Number(n)),
+            Expression::Identifier(ident) => {
                 match self.symbol_table.get(&ident) {
                     Some(value) => Ok(value.clone()),
                     None =>{
@@ -26,34 +26,33 @@ impl Interpreter {
                     },
                 }
             },
-            Expr::Infix(left, op, right) => {
+            Expression::Infix(left, op, right) => {
                 let left_value = self.visit_expr(*left)?;
                 let right_value = self.visit_expr(*right)?;
-    
-                // For numerical operations
-                if let (Value::Number(left), Value::Number(right)) = (&left_value, &right_value) {
-                    return match op.as_str() {
-                        "+" => Ok(Value::Number(left + right)),
-                        "-" => Ok(Value::Number(left - right)),
-                        "*" => Ok(Value::Number(left * right)),
-                        "/" => Ok(Value::Number(left / right)),
-                        _ => Err(anyhow::anyhow!("Unexpected operator: {}", op)),
-                    };
-                }
-    
-                // For string concatenation
-                if let (Value::Str(left), Value::Str(right)) = (&left_value, &right_value) {
-                    if op == "+" {
-                        return Ok(Value::Str(format!("{}{}", left, right)));
-                    }
-                }
 
-    
-                Err(anyhow::anyhow!("Invalid operation: {} {} {}", left_value, op, right_value))
+                match (&left_value, &right_value) {
+                    (Value::Number(left), Value::Number(right)) => {
+                        let (left, right) = (left.clone(), right.clone());
+                        return match op.as_str() {
+                            "+" => Ok(Value::Number(left + right)),
+                            "-" => Ok(Value::Number(left - right)),
+                            "*" => Ok(Value::Number(left * right)),
+                            "/" => Ok(Value::Number(left / right)),
+                            _ => Err(anyhow::anyhow!("Unexpected operator: {}", op)),
+                        };
+                    },
+                    (Value::Str(left), Value::Str(right)) => {
+                        return match op.as_str() {
+                            "+" => Ok(Value::Str(format!("{}{}", left, right))),
+                            _ => Err(anyhow::anyhow!("Unexpected operator: {}", op)),
+                        };
+                    },
+                    _ => return Err(anyhow::anyhow!("Invalid operation: {} {} {}", left_value, op, right_value)),
+                }
             },
-            Expr::Char(c) => Ok(Value::Char(c)),
-            Expr::String(s) => Ok(Value::Str(s)),
-            Expr::Call(name, args) => {
+            Expression::Char(c) => Ok(Value::Char(c)),
+            Expression::String(s) => Ok(Value::Str(s)),
+            Expression::Call(name, args) => {
                 let function = match self.symbol_table.get(&name) {
                     Some(value) => value,
                     None => return Err(anyhow::anyhow!("Undefined function: {}", name)),
@@ -74,7 +73,7 @@ impl Interpreter {
                         }
             
                         // Execute the body
-                        let mut last_value = Value::Number(0); // Default value
+                        let mut last_value = Value::Number(0.into()); // Default value
                         for stmt in &body {
                             let res = self.visit_stmt(stmt.clone())?;
                             last_value = Value::Str(res);
@@ -112,20 +111,20 @@ impl Interpreter {
         }
     }
 
-    pub fn visit_stmt(&mut self, stmt: Stmt) -> anyhow::Result<String> {
+    pub fn visit_stmt(&mut self, stmt: Statement) -> anyhow::Result<String> {
         match stmt {
-            Stmt::Let(ident, expr) => {
+            Statement::Let(ident, expr) => {
                 let value = self.visit_expr(expr)?;
                 self.symbol_table.insert(ident.clone(), value.clone());
                 Ok(format!("{}: {} = {}", ident, value.type_name(), value))
             },
-            Stmt::Expr(expr) => {
+            Statement::Expr(expr) => {
                 Ok(format!("{}", self.visit_expr(expr)?))
             },
-            Stmt::Return(expr) => {
+            Statement::Return(expr) => {
                 Ok(format!("{}",  self.visit_expr(expr)?))
             },
-            Stmt::Function(name, params, body) => {
+            Statement::Function(name, params, body) => {
                 self.symbol_table.insert(name.clone(), Value::Function(params, body));
                 Ok(format!("Function defined: {}", name))
             },
@@ -139,10 +138,10 @@ impl Interpreter {
 
 #[derive(Debug, Clone)]
 pub enum Value {
-    Number(i32),
+    Number(Integer),
     Str(String),
     Char(char),
-    Function(Vec<String>, Vec<Stmt>),
+    Function(Vec<String>, Vec<Statement>),
     // You can add more types here in future.
 }
 
@@ -157,7 +156,7 @@ impl std::fmt::Display for Value {
                 params,
                 body,
             ) => write!(f, "fn({}) {{\n{}\n}}", params.join(", "), body.iter().map(|stmt| {
-                if let Stmt::Expr(expr) = stmt {
+                if let Statement::Expr(expr) = stmt {
                     format!("{}", expr)
                 } else {
                     format!("{:?}", stmt)

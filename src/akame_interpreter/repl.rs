@@ -1,8 +1,8 @@
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
+use crate::parsers::parse_program;
 
-use crate::interpreter::Interpreter;
-use crate::nom_parser;
+use super::interpreter::Interpreter;
 
 pub fn interactive() -> Result<(), Box<dyn std::error::Error>> {
     let mut rl = Editor::<()>::new();
@@ -17,7 +17,7 @@ pub fn interactive() -> Result<(), Box<dyn std::error::Error>> {
         match readline {
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
-                match nom_parser::parse_program(&line) {
+                match parse_program(&line) {
                     Ok((_, parsed_program)) => {
                         for stmt in parsed_program {
                             match interpreter.visit_stmt(stmt) {
