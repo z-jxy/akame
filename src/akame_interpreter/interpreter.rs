@@ -19,15 +19,7 @@ impl Interpreter {
                 parsed_program.iter().for_each(|stmt| {
                     match self.visit_stmt(stmt) {
                         // we don't print anything since
-                        Ok(_) => {
-                            //match result {
-                            //    Value::Number(n) => (),
-                            //    Value::Str(s) => (),
-                            //    Value::None => (),
-                            //    Value::Return(value) => println!("=> {}", value),
-                            //    _ => todo!("Implement display for other types"),
-                            //}
-                        }
+                        Ok(_) => (),
                         Err(err) => eprintln!("Interpreter error: {}", err),
                     }
                 });
@@ -63,12 +55,12 @@ impl Interpreter {
     }
 
     fn visit_expr(&mut self, expr: &Expression) -> anyhow::Result<Value> {
-        //println!("Environment: {:?}", self.environment);
         match expr {
             Expression::Number(n) => Ok(Value::Number(n.clone())),
             Expression::Identifier(ident) => {
-                match self.symbol_table.get(ident) {
-                    Some(value) => Ok(value.clone()),
+                let value = self.symbol_table.get(ident);
+                match value {
+                    Some(value) => Ok(value.to_owned()),
                     None =>{
                         println!("Symbol table: {:?}", self.symbol_table);
                         Err(anyhow::anyhow!("Undefined variable: {}", ident))
@@ -186,34 +178,6 @@ impl Interpreter {
         }
     }
 
-    //fn visit_stmt(&mut self, stmt: &Statement) -> anyhow::Result<String> {
-    //    match stmt {
-    //        Statement::Let(ident, expr) => {
-    //            let value = self.visit_expr(&expr)?;
-    //            self.symbol_table.insert(ident.clone(), value.clone());
-    //            let s = self.symbol_table.get(ident).unwrap();
-    //            Ok(format!("{}: {} = {}", ident, value.type_name(), value))
-    //        },
-    //        Statement::Expr(expr) => {
-    //            Ok(format!("{}", self.visit_expr(&expr)?))
-    //        },
-    //        Statement::Return(expr) => {
-    //            Ok(format!("{}",  self.visit_expr(&expr)?))
-    //        },
-    //        Statement::Function(name, params, body) => {
-    //            let output = format!("fn {name}({params}) {{\n  {body}\n  }}", 
-    //            params=params.join(", "), 
-    //            body=body.iter().map(|stmt| {
-    //                format!("   {}", stmt)
-    //            }).collect::<Vec<String>>().join("\n"));
-    //            self.symbol_table.insert(name.to_owned(), Value::Function(params.to_owned(), body.//to_owned()));
-    //            Ok(output)
-    //        },
-    //        Statement::Print(expr) => {
-    //            Ok(format!("!!!!{}", self.visit_expr(&expr)?))
-    //        },
-    //    }
-    //}
 
     fn visit_stmt(&mut self, stmt: &Statement) -> anyhow::Result<Value> {
         match stmt {
@@ -228,24 +192,21 @@ impl Interpreter {
             },
 
             Statement::Print(expr) => {
-                //println!("in print statement");
-                let value = self.visit_expr(&expr)?;
-                //println!("got a value from print statement expr: {:?}", value);
-                match value {
-                    Value::Str(s) => {
-                        println!("{:?}", s);
-                        Ok(Value::None)
-                    },
-                    Value::Number(n) => {  // Handle numbers
-                        println!("{}", n);
-                        Ok(Value::None)
-                    },
-                    Value::Return(v) => {
-                        println!("{}", v);
-                        Ok(Value::None)
-                    },
-                    x => Err(anyhow::anyhow!("Expected string argument to print. Got: {:?}", x))
+                // check if the variable already exists in the symbol table
+                if let Expression::Identifier(ident) = expr {
+                    let value = self.symbol_table.get(ident);
+                    match value {
+                        Some(value) => {
+                            return handle_value(&value);
+                        },
+                        None => {
+                            println!("Symbol table: {:?}", self.symbol_table);
+                            return Err(anyhow::anyhow!("Undefined variable: {}", ident))
+                        },
+                    }
                 }
+                // if not in the table, we need to visit the expression
+                return handle_value(&self.visit_expr(&expr)?)
             },
 
             Statement::Function(name, params, body) => {
@@ -255,6 +216,8 @@ impl Interpreter {
             },
         }
     }
+
+    
 
     //fn call_function(&mut self, name: &str, args: Vec<Expression>) -> Result<Value, anyhow::Error> {
     //    match name {
@@ -309,7 +272,23 @@ impl Interpreter {
 
 }
 
-
+fn handle_value(value: &Value) -> anyhow::Result<Value> {
+    match value {
+        Value::Str(s) => {
+            println!("{:?}", s);
+            Ok(Value::None)
+        },
+        Value::Number(n) => {  // Handle numbers
+            println!("{}", n);
+            Ok(Value::None)
+        },
+        Value::Return(v) => {
+            println!("{}", v);
+            Ok(Value::None)
+        },
+        x => Err(anyhow::anyhow!("Expected string argument to print. Got: {:?}", x))
+    }
+}
 
 
 #[derive(Debug, Clone)]
