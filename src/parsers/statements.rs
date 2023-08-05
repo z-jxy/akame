@@ -6,7 +6,15 @@ use nom::sequence::{delimited, tuple, terminated};
 use nom::IResult;
 
 use crate::ast::{Expression, Statement};
+use super::functions::ws;
 use super::tokens::{parse_identifier, expr};
+
+pub fn parse_print_statement(input: &str) -> IResult<&str, Statement> {
+    let (input, _) = ws(tag("println!"))(input)?;
+    let (input, _) = multispace0(input)?;
+    let (input, expr) = expr(input)?;
+    Ok((input, Statement::Print(expr)))
+}
 
 pub fn parse_let_statement(input: &str) -> IResult<&str, Statement> {
     map(

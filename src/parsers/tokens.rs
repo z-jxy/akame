@@ -29,7 +29,6 @@ pub fn get_identifier(e: Expression) -> Option<String> {
     }
 }
 
-
 fn parse_number(input: &str) -> IResult<&str, Expression> {
     let (input, num_str) = digit1(input)?;
     let number = match num_str {

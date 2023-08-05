@@ -4,7 +4,7 @@ use nom::branch::alt;
 use nom::bytes::complete::tag;
 
 
-use nom::character::streaming::multispace0;
+use nom::character::complete::multispace0;
 use nom::multi::{separated_list0, many0};
 use nom::sequence::delimited;
 use nom::IResult;
@@ -13,7 +13,7 @@ use crate::ast::{Expression, Statement};
 use crate::parsers::tokens::{parse_identifier, get_identifier};
 
 
-use super::statements::{parse_return_statement, parse_let_statement};
+use super::statements::{parse_return_statement, parse_let_statement, parse_print_statement};
 use super::tokens::expr;
 
 
@@ -31,8 +31,7 @@ impl fmt::Display for Expression {
 }
 
 fn parse_function_declaration(input: &str) -> IResult<&str, Statement> {
-    let (input, _) = tag("fn")(input)?;
-    //println!("it's a function!");
+    let (input, _) = ws(tag("fn"))(input)?;
     let (input, _) = multispace0(input)?;
     let (input, ident) = parse_identifier(input)?;
     let (input, _) = multispace0(input)?;
@@ -43,9 +42,10 @@ fn parse_function_declaration(input: &str) -> IResult<&str, Statement> {
     )(input)?;
     //println!("params: {:?}", params);
     let (input, _) = multispace0(input)?;
+    //println!("checking for body: {:?}", input);
 
     let (input, body) = delimited(
-        tag("{"), many0(parse_statement), tag("}"))
+        tag("{"), many0(ws(parse_statement)), tag("}"))
         (input)?;
 
     //println!("body: {:?}", body);
@@ -64,21 +64,29 @@ fn parse_function_declaration(input: &str) -> IResult<&str, Statement> {
 }
 
 
-
-
-
 fn parse_expr_statement(input: &str) -> IResult<&str, Statement> {
     let (input, expr) = expr(input)?;
     Ok((input, Statement::Expr(expr)))
 }
 
+pub fn ws<'a, T, F>(parser: F) -> impl Fn(&'a str) -> IResult<&'a str, T>
+where
+    F: Fn(&'a str) -> IResult<&'a str, T>,
+{
+    move |input: &'a str| {
+        let (input, _) = multispace0(input)?;
+        parser(input)
+    }
+}
+
 
 pub fn parse_statement(input: &str) -> IResult<&str, Statement> {
+    //println!("parse_statement: {:?}", input);
     alt((
         parse_let_statement,
         parse_return_statement,
         parse_function_declaration,
         parse_expr_statement,
-        
+        parse_print_statement,
     ))(input)
 }

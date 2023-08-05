@@ -1,6 +1,5 @@
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
-use crate::parsers::parse_program;
 
 use super::interpreter::Interpreter;
 
@@ -17,21 +16,7 @@ pub fn interactive() -> Result<(), Box<dyn std::error::Error>> {
         match readline {
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
-                match parse_program(&line) {
-                    Ok((_, parsed_program)) => {
-                        for stmt in parsed_program {
-                            match interpreter.visit_stmt(&stmt) {
-                                Ok(result) => println!("=> {}", result),
-                                Err(err) => eprintln!("Interpreter error: {}", err),
-                            }
-                        }
-                    },
-                    Err(err) => {
-                        println!("{}", "=".repeat(80));
-                        eprintln!("[Parser::parse] error: {}", err);
-                        println!("{}", "=".repeat(80));
-                    },
-                }
+                print!("{}", interpreter.eval_str(&line)?);
             },
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");

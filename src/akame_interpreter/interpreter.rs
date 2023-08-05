@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{ast::{Statement, Expression}, types::integer::Integer};
+use crate::{ast::{Statement, Expression}, types::integer::Integer, parsers::parse_program};
 
 pub struct Interpreter {
     symbol_table: HashMap<String, Value>,  // assuming all variables are i32 for simplicity
@@ -13,7 +13,55 @@ impl Interpreter {
         }
     }
 
-    pub fn visit_expr(&mut self, expr: &Expression) -> anyhow::Result<Value> {
+    pub fn eval_source(&mut self, script: &str) {
+        match parse_program(&script) {
+            Ok((_, parsed_program)) => {
+                parsed_program.iter().for_each(|stmt| {
+                    match self.visit_stmt(stmt) {
+                        // we don't print anything since
+                        Ok(result) => {
+                            match result {
+                                Value::Number(n) => println!("=> {}", n),
+                                Value::Str(s) => println!("=> {}", s),
+                                Value::None => (),
+                                _ => todo!("Implement display for other types"),
+                            }
+                        }
+                        Err(err) => eprintln!("Interpreter error: {}", err),
+                    }
+                });
+            },
+            Err(err) => {
+                println!("{}", "=".repeat(80));
+                eprintln!("[Parser::parse] error: {}", err);
+                println!("{}", "=".repeat(80));
+            },
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn eval_str(&mut self, input: &str) -> anyhow::Result<String> {
+        match parse_program(&input) {
+            Ok((_, parsed_program)) => {
+                let mut result = String::new();
+                for stmt in parsed_program {
+                    match self.visit_stmt(&stmt) {
+                        Ok(value) => result.push_str(&format!("=> {}\n", value)),
+                        Err(err) => return Err(anyhow::anyhow!("Interpreter error: {}", err)),
+                    }
+                }
+                Ok(result)
+            },
+            Err(err) => {
+                println!("{}", "=".repeat(80));
+                eprintln!("[Parser::parse] error: {}", err);
+                println!("{}", "=".repeat(80));
+                Err(anyhow::anyhow!("Parser error: {}", err))
+            },
+        }
+    }
+
+    fn visit_expr(&mut self, expr: &Expression) -> anyhow::Result<Value> {
         //println!("Environment: {:?}", self.environment);
         match expr {
             Expression::Number(n) => Ok(Value::Number(n.clone())),
@@ -56,75 +104,197 @@ impl Interpreter {
             Expression::Char(c) => Ok(Value::Char(*c)),
             Expression::String(s) => Ok(Value::Str(s.clone().into())),
             Expression::Call(name, args) => {
-                let function = match self.symbol_table.get(name) {
-                    Some(value) => value,
-                    None => return Err(anyhow::anyhow!("Undefined function: {}", name)),
-                };
-                match function.clone() {
-                    Value::Function(params, body) => {
-                        if params.len() != args.len() {
-                            return Err(anyhow::anyhow!("Expected {} arguments but received {}", params.len(), args.len()));
-                        }
-            
-                        // Create a new scope
-                        let old_env = self.symbol_table.clone();
-
-                        let ret = {
-
-                            // Bind arguments to parameters
-                            for (param, arg) in params.iter().zip(args.iter()) {
-                                let arg_value = self.visit_expr(arg)?;
-                                self.symbol_table.insert(param.to_owned(), arg_value);
-                            }
-                        
-                            // Execute the body
-                            let mut last_value = Value::Number(0.into()); // Default value
-                            for stmt in &body {
-                                let res = self.visit_stmt(stmt)?;
-                                last_value = Value::Str(res.into());
-                            }
-                            // Return the last value
-                            // TODO: Return statement
-                            last_value
-                        };
-                        
-
-            
-                        // Restore the old scope
-                        self.symbol_table = old_env;
-            
-                        Ok(ret) 
-                    },
-                    _ => panic!("Not a function: {}", name),
+                match self.call_function(name.as_str(), args) {
+                    Ok(value) => Ok(value),
+                    Err(err) => Err(err),
                 }
             },
         }
     }
 
-    pub fn visit_stmt(&mut self, stmt: &Statement) -> anyhow::Result<String> {
+    fn call_function(&mut self, name: &str, args: &[Expression]) -> anyhow::Result<Value> {
+        match name {
+            "print" => {
+                if let Some(arg) = args.get(0) {
+                    let value = self.visit_expr(arg)?;
+                    match value {
+                        Value::Str(s) => {
+                            println!("{:?}", s);
+                            Ok(Value::None)
+                        },
+                        Value::Number(n) => {  // Handle numbers
+                            println!("{}", n);
+                            Ok(Value::None)
+                        },
+                        _ => Err(anyhow::anyhow!("Expected string argument to print"))
+                    }
+                } else {
+                    Err(anyhow::anyhow!("print function expects at least one argument"))
+                }
+            },
+            _ => {
+                let symbol = self.symbol_table.get(name);
+                match symbol {
+                    Some(value) => {
+                        match value.clone() {
+                            Value::Function(params, body) => {
+                                if params.len() != args.len() {
+                                    return Err(anyhow::anyhow!("Expected {} arguments, got {}", params.len(), args.len()));
+                                }
+                                // Create a new scope
+                                let old_env = self.symbol_table.clone();
+
+                                let ret = {
+                                    // Bind arguments to parameters
+                                    params.iter().zip(args.iter().cloned()).for_each(|x | {
+                                        let (param, arg) = x;
+                                        let arg_value = self.visit_expr(&arg);
+                                        match arg_value {
+                                            Ok(value) => {
+                                                (*self).symbol_table.insert(param.to_owned(), value);
+                                            },
+                                            Err(err) => {
+                                                println!("Error: {}", err);
+                                            },
+                                        }
+                                        //(*self).symbol_table.insert(param.to_owned(), arg_value);
+                                    });
+                                    // Execute the body
+                                    let mut value = Value::Number(0.into()); // Default value
+                                    body.iter().cloned().for_each(|stmt| {
+                                        value = self.visit_stmt(&stmt).unwrap();
+                                    });
+                                    // Return the last value
+                                    value
+                                };
+
+                                self.symbol_table = old_env;
+                                return Ok(ret)
+                            },
+                            Value::None => Ok(Value::None),
+                            _ => todo!("Not a function: {}", name)
+                        }
+                    },
+                    None => Err(anyhow::anyhow!("Undefined function: {}", name)),
+                }
+            },
+        }
+    }
+
+    //fn visit_stmt(&mut self, stmt: &Statement) -> anyhow::Result<String> {
+    //    match stmt {
+    //        Statement::Let(ident, expr) => {
+    //            let value = self.visit_expr(&expr)?;
+    //            self.symbol_table.insert(ident.clone(), value.clone());
+    //            let s = self.symbol_table.get(ident).unwrap();
+    //            Ok(format!("{}: {} = {}", ident, value.type_name(), value))
+    //        },
+    //        Statement::Expr(expr) => {
+    //            Ok(format!("{}", self.visit_expr(&expr)?))
+    //        },
+    //        Statement::Return(expr) => {
+    //            Ok(format!("{}",  self.visit_expr(&expr)?))
+    //        },
+    //        Statement::Function(name, params, body) => {
+    //            let output = format!("fn {name}({params}) {{\n  {body}\n  }}", 
+    //            params=params.join(", "), 
+    //            body=body.iter().map(|stmt| {
+    //                format!("   {}", stmt)
+    //            }).collect::<Vec<String>>().join("\n"));
+    //            self.symbol_table.insert(name.to_owned(), Value::Function(params.to_owned(), body.//to_owned()));
+    //            Ok(output)
+    //        },
+    //        Statement::Print(expr) => {
+    //            Ok(format!("!!!!{}", self.visit_expr(&expr)?))
+    //        },
+    //    }
+    //}
+
+    fn visit_stmt(&mut self, stmt: &Statement) -> anyhow::Result<Value> {
         match stmt {
             Statement::Let(ident, expr) => {
                 let value = self.visit_expr(&expr)?;
                 self.symbol_table.insert(ident.clone(), value.clone());
-                Ok(format!("{}: {} = {}", ident, value.type_name(), value))
+                Ok(value)
             },
-            Statement::Expr(expr) => {
-                Ok(format!("{}", self.visit_expr(&expr)?))
+            Statement::Expr(expr) 
+            | Statement::Return(expr) => {
+                Ok(self.visit_expr(&expr)?)
             },
-            Statement::Return(expr) => {
-                Ok(format!("{}",  self.visit_expr(&expr)?))
+
+            Statement::Print(expr) => {
+                let value = self.visit_expr(&expr)?;
+                match value {
+                    Value::Str(s) => {
+                        println!("{:?}", s);
+                        Ok(Value::None)
+                    },
+                    Value::Number(n) => {  // Handle numbers
+                        println!("{}", n);
+                        Ok(Value::None)
+                    },
+                    _ => Err(anyhow::anyhow!("Expected string argument to print"))
+                }
             },
+
             Statement::Function(name, params, body) => {
-                let output = format!("fn {name}({params}) {{\n  {body}\n  }}", 
-                params=params.join(", "), 
-                body=body.iter().map(|stmt| {
-                    format!("   {}", stmt)
-                }).collect::<Vec<String>>().join("\n"));
-                self.symbol_table.insert(name.to_owned(), Value::Function(params.to_owned(), body.to_owned()));
-                Ok(output)
+                let value: Value = Value::Function(params.to_owned(), body.to_owned());
+                self.symbol_table.insert(name.to_owned(), value.to_owned());
+                Ok(Value::None)
             },
         }
-}
+    }
+
+    //fn call_function(&mut self, name: &str, args: Vec<Expression>) -> Result<Value, anyhow::Error> {
+    //    match name {
+    //        "print" => {
+    //            if let Some(arg) = args.get(0) {
+    //                let value = self.visit_expr(arg)?;
+    //                match value {
+    //                    Value::Str(s) => {
+    //                        println!("{}", s);
+    //                        Ok(Value::None)  // Assuming Value::None is your "void" type
+    //                    },
+    //                    _ => Err(anyhow::anyhow!("Expected string argument to print"))
+    //                }
+    //            } else {
+    //                Err(anyhow::anyhow!("print function expects at least one argument"))
+    //            }
+    //        }
+    //        _fn => {
+    //            if let Some(
+    //                Value::Function(params, body)
+    //            ) = self.symbol_table.get(name) {
+    //                if params.len() != args.len() {
+    //                    return Err(anyhow::anyhow!("Expected {} arguments but received {}", params.len(), //args.len()));
+    //                }
+    //
+    //                // Create a new scope
+    //                let old_env = self.symbol_table.clone();
+    //                let ret = {
+    //                    // Bind arguments to parameters
+    //                    for (param, arg) in params.iter().zip(args.iter()) {
+    //                        let arg_value = self.visit_expr(arg)?;
+    //                        self.symbol_table.insert(param.to_owned(), arg_value);
+    //                    }
+    //                
+    //                    // Execute the body
+    //                    let mut last_value = Value::Str("".into()); // Default value
+    //                    for stmt in body {
+    //                        last_value = Value::Str(self.visit_stmt(stmt)?.into());
+    //                    }
+    //                    last_value
+    //                };
+    //                // Restore the old scope
+    //                self.symbol_table = old_env;
+    //                
+    //                Ok(ret)
+    //            } else {
+    //                Err(anyhow::anyhow!("Undefined function: {}", name))
+    //            }
+    //        }
+    //    }
+    //}
 
 }
 
@@ -137,6 +307,8 @@ pub enum Value {
     Str(Box<str>),
     Char(char),
     Function(Vec<String>, Vec<Statement>),
+    None,
+
     // You can add more types here in future.
 }
 
@@ -157,17 +329,19 @@ impl std::fmt::Display for Value {
                     format!("{:?}", stmt)
                 }
             }).collect::<Vec<String>>().join("\n")),
+            Value::None => Ok(()),
         }
     }
 }
 
-impl Value {
-    pub fn type_name(&self) -> &str {
-        match self {
-            Value::Number(_) => "number",
-            Value::Str(_) => "string",
-            Value::Char(_) => "char",
-            Value::Function(..) => "function",
-        }
-    }
-}
+//impl Value {
+//    pub fn type_name(&self) -> &str {
+//        match self {
+//            Value::Number(_) => "number",
+//            Value::Str(_) => "string",
+//            Value::Char(_) => "char",
+//            Value::Function(..) => "function",
+//            Value::None => "none",
+//        }
+//    }
+//}

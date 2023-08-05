@@ -27,6 +27,7 @@ pub enum Statement {
     Expr(Expression),
     Return(Expression),  
     Function(String, Vec<String>, Vec<Statement>),
+    Print(Expression),
 }
 
 
@@ -47,6 +48,7 @@ impl std::fmt::Display for Statement {
                     format!("{:?}", &stmt)
                 }
             }).collect::<Vec<String>>().join("\n")),
+            Statement::Print(expr) => write!(f, "{}", expr),
         }
     }
 }
