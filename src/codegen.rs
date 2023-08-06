@@ -1,7 +1,9 @@
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::OptimizationLevel;
+use inkwell::values::AnyValue;
 
+#[derive(Debug, Clone)]
 enum Expr {
     Num(u64),
     Add(Box<Expr>, Box<Expr>),
@@ -22,12 +24,17 @@ enum Stmt {
     Print(String),
 }
 
+enum VariableValue<'ctx> {
+    Int(inkwell::values::IntValue<'ctx>),
+    Str(String),
+}
+
 struct Compiler<'ctx> {
     context: &'ctx Context,
     builder: inkwell::builder::Builder<'ctx>,
     module: inkwell::module::Module<'ctx>,
     execution_engine: ExecutionEngine<'ctx>,
-    variables: std::collections::HashMap<String, inkwell::values::IntValue<'ctx>>,
+    variables: std::collections::HashMap<String, VariableValue<'ctx>>
 }
 
 impl<'ctx> Compiler<'ctx> {
@@ -49,12 +56,18 @@ impl<'ctx> Compiler<'ctx> {
                 }
             },
             Expr::Var(var_name) => {
-                if let Some(value) = self.variables.get(var_name) {
-                    *value
-                } else {
-                    // This will print the name of the missing variable
-                    println!("Variable {} not found in symbol table", var_name);
-                    panic!("Variable not found in symbol table");
+                match self.variables.get(var_name) {
+                    Some(VariableValue::Int(value)) => *value,
+                    Some(VariableValue::Str(referenced_var)) => {
+                        match self.variables.get(referenced_var) {
+                            Some(VariableValue::Int(referenced_value)) => *referenced_value,
+                            _ => panic!("Dereferencing non-int variable or undefined variable")
+                        }
+                    },
+                    None => {
+                        println!("Variable {} not found in symbol table", var_name);
+                        panic!("Variable not found in symbol table");
+                    }
                 }
             },
         }
@@ -70,7 +83,7 @@ impl<'ctx> Compiler<'ctx> {
 
                     for (i, param) in params.iter().enumerate() {
                         let value = function.get_nth_param(i as u32).unwrap().into_int_value();
-                        self.variables.insert(param.clone(), value);
+                        self.variables.insert(param.clone(), VariableValue::Int(value));
                     }
 
                     let entry = self.context.append_basic_block(function, "entry");
@@ -81,19 +94,39 @@ impl<'ctx> Compiler<'ctx> {
                     //unsafe { self.execution_engine.get_function("sum").ok() }
                 },
                 Stmt::Assignment { var_name, expr } => {
-                    //let value = self.compile_expr(expr);
-                    //self.variables.insert(var_name.clone(), value);
+                    match expr {
+                        Expr::Var(string_value) => {
+                            // If it's a Var expression, assume it's a string value
+                            self.variables.insert(var_name.clone(), VariableValue::Str(string_value.clone()));
+                        },
+                        _ => {
+                            let value = self.compile_expr(expr);
+                            self.variables.insert(var_name.clone(), VariableValue::Int(value));
+                        }
+                    }
                 },
                 Stmt::Print(var_name) => {
-                    // For simplicity, just evaluate the function and print the result
-
-                    unsafe {
-                        let hello_function = self.execution_engine.get_function::<unsafe extern "C" fn(i32) -> i32>
-                        (var_name).unwrap();
-                        let result = hello_function.call(5);
-                        println!("{}", result);
+                    if let Some(value) = self.variables.get(var_name) {
+                        // Print variable value if it exists
+                        match value {
+                            VariableValue::Int(value) => println!("{} => {}", var_name, value),
+                            VariableValue::Str(value) => println!("{} => {}", var_name, value),
+                        }
+                    } else {
+                        // Try to execute it as a function
+                        unsafe {
+                            if let Ok(hello_function) = self
+                                .execution_engine
+                                .get_function::<unsafe extern "C" fn(i32) -> i32>
+                                (var_name) 
+                            {
+                                let result = hello_function.call(5);
+                                println!("{} => {}", var_name, result);
+                            } else {
+                                println!("Error: Cannot print '{}'", var_name);
+                            }
+                        }
                     }
-
                 },
             }
         }
@@ -121,8 +154,8 @@ pub fn codegen() {
             body: Expr::Add(Box::new(Expr::Num(5)), Box::new(Expr::Var("num".to_string()))), // num + 5
         },
         Stmt::Assignment {
-            var_name: "result".to_string(),
-            expr: Expr::Call("hello".to_string(), Box::new(Expr::Num(3))),
+            var_name: "x".to_string(),
+            expr: Expr::Var("hello-world".to_string()),
         },
         Stmt::Print("hello".to_string()),
     ];
