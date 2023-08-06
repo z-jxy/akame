@@ -5,17 +5,18 @@ use inkwell::OptimizationLevel;
 
 #[derive(Debug, Clone)]
 enum Expr {
-    Num(u64),
+    Num(i32),
     Add(Box<Expr>, Box<Expr>),
     Call(String, Box<Expr>),
     Var(String),
+    Print(Box<Expr>), 
 }
 
 enum Stmt {
     FunctionDeclaration {
         name: String,
         params: Vec<String>,
-        body: Expr,
+        body: Vec<Expr>,
     },
     Assignment {
         var_name: String,
@@ -54,7 +55,7 @@ pub extern "C" fn printd(x: i32) -> i32 {
 impl<'ctx> Compiler<'ctx> {
     fn compile_expr(&self, expr: &Expr) -> inkwell::values::IntValue<'ctx> {
         match expr {
-            Expr::Num(n) => self.context.i64_type().const_int(*n, false),
+            Expr::Num(n) => self.context.i32_type().const_int(*n as u64, false),
             Expr::Add(left, right) => {
                 let left_value = self.compile_expr(left);
                 let right_value = self.compile_expr(right);
@@ -85,6 +86,12 @@ impl<'ctx> Compiler<'ctx> {
                     panic!("Variable not found in symbol table");
                 }
             },
+            Expr::Print(expr) => {
+                let value = self.compile_expr(expr);
+                let function = self.module.get_function("printd").unwrap();
+                self.builder.build_call(function, &[value.into()], "calltmp");
+                value
+            }
         }
     }
 
@@ -92,21 +99,55 @@ impl<'ctx> Compiler<'ctx> {
         for stmt in stmts {
             match stmt {
                 Stmt::FunctionDeclaration { name, params, body } => {
-                    let param_types = vec![self.context.i64_type().into(); params.len()];
-                    let fn_type = self.context.i64_type().fn_type(&param_types, false);
+                    let param_types = vec![self.context.i32_type().into(); params.len()];
+                    let fn_type = self.context.i32_type().fn_type(&param_types, false);
                     let function = self.module.add_function(name, fn_type, None);
+                    let entry = self.context.append_basic_block(function, "entry");
+                    self.builder.position_at_end(entry);
 
                     for (i, param) in params.iter().enumerate() {
                         let value = function.get_nth_param(i as u32).unwrap().into_int_value();
                         self.variables
                             .insert(param.clone(), VariableValue::Int(value));
                     }
+                    
 
-                    let entry = self.context.append_basic_block(function, "entry");
-                    self.builder.position_at_end(entry);
 
-                    let result = self.compile_expr(body);
-                    self.builder.build_return(Some(&result));
+                    let mut last_value = None;
+
+                    for (i, expr) in body.iter().enumerate() {
+                        let is_last_expr = i == body.len() - 1;
+
+                        match expr {
+                            Expr::Call(func_name, arg) => {
+                                let function = self.module.get_function(func_name).unwrap();
+                                let arg_value = self.compile_expr(arg);
+                                let call_result = self.builder.build_call(function, &[arg_value.into()],                    "calltmp");
+
+                                if is_last_expr {
+                                    last_value = call_result.try_as_basic_value().left();
+                                }
+                            }
+                            _ => {
+                                let value = self.compile_expr(expr);
+                                if is_last_expr {
+                                    last_value = Some(value.into());
+                                }
+                            }
+                        }
+                    }
+
+                    // Return the value of the last expression:
+                    if let Some(value) = last_value {
+                        self.builder.build_return(Some(&value));
+                    } else {
+                        // Alternatively, you can have a default return value or handle this case differently
+                        self.builder.build_return(Some(&self.context.i64_type().const_int(0, false)));
+                    }
+
+            
+                    
+                    //self.builder.build_return(Some(&result));
                     //unsafe { self.execution_engine.get_function("sum").ok() }
                 }
                 Stmt::Assignment { var_name, expr } => {
@@ -191,25 +232,33 @@ pub fn codegen() {
         variables,
     };
 
+    let i32_type = compiler.context.i32_type();
+    let fn_type = i32_type.fn_type(&[i32_type.into()], false);
+    compiler.module.add_function("printd", fn_type, None);
+
     let ast = vec![
+        // define hello function
         Stmt::FunctionDeclaration {
             name: "hello".to_string(),
             params: vec!["num".to_string()],
-            body: Expr::Add(
+            body: vec![Expr::Add(
                 Box::new(Expr::Num(5)),
                 Box::new(Expr::Var("num".to_string())),
-            ), // num + 5
+            )], // num + 5
         },
+        // define main function
         Stmt::FunctionDeclaration {
             name: "main".to_string(),
             params: vec!["argc".to_string()],
-            body: Expr::Call("hello".to_string(), Box::new(Expr::Num(5))),
+            body: vec![
+                Expr::Call("hello".to_string(), Box::new(Expr::Num(5))),
+                Expr::Call("printd".to_string(), Box::new(Expr::Num(5)))
+            ],
         },
         Stmt::Assignment {
             var_name: "x".to_string(),
             expr: Expr::Var("hello-world".to_string()),
         },
-        Stmt::Print("hello".to_string()),
     ];
     compiler.compile(&ast);
     println!("{}", compiler.module.print_to_string().to_string());
@@ -233,20 +282,17 @@ pub fn debug() {
 
     let ast = vec![
         Stmt::FunctionDeclaration {
-            name: "main".to_string(),
-            params: vec!["num".to_string()],
-            body: Expr::Add(
-                Box::new(Expr::Num(5)),
-                Box::new(Expr::Var("num".to_string())),
-            ), // num + 5
-        },
-        Stmt::FunctionDeclaration {
             name: "hello".to_string(),
             params: vec!["num".to_string()],
-            body: Expr::Add(
+            body: vec![Expr::Add(
                 Box::new(Expr::Num(5)),
                 Box::new(Expr::Var("num".to_string())),
-            ), // num + 5
+            )], // num + 5
+        },
+        Stmt::FunctionDeclaration {
+            name: "main".to_string(),
+            params: vec!["argc".to_string()],
+            body: vec![Expr::Call("hello".to_string(), Box::new(Expr::Num(5)))],
         },
         Stmt::Assignment {
             var_name: "x".to_string(),

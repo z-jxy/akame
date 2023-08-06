@@ -5,6 +5,8 @@ BUILD_DIR=build
 BINARY_OUTPUT=$(BUILD_DIR)/main
 OBJ_OUTPUT=$(BUILD_DIR)/main.o
 LL_INPUT=$(BUILD_DIR)/main.ll
+lib=lib
+libs=$(wildcard $(lib)/*.o)
 
 # Default target
 all: $(BINARY_OUTPUT)
@@ -20,7 +22,7 @@ $(OBJ_OUTPUT): $(LL_INPUT)
 
 # Link the object code to create the binary
 $(BINARY_OUTPUT): $(OBJ_OUTPUT)
-	$(GCC) $(OBJ_OUTPUT) build/printd.o -o $(BINARY_OUTPUT)
+	$(GCC) $(OBJ_OUTPUT) $(libs) -o $(BINARY_OUTPUT)
 
 ll-redo: $(LL_INPUT)
 	$(LLC) -filetype=obj $(LL_INPUT) -o $(OBJ_OUTPUT)
