@@ -1,2 +1,5 @@
 /target
 .history.txt
+bazel-*/*
+/bazel-*
+/rust/target
