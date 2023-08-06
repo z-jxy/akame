@@ -14,7 +14,7 @@ fn main() {
 
     match args[1].as_str() {
         "llvm" => llvm::llvm_codegen(),
-        "debug" => llvm::llvm_debug(),
+        //"debug" => llvm::llvm_debug(),
         _ => {
             let filename = &args[1];
             let script = std::fs::read_to_string(filename).expect("Something went wrong reading the file");
