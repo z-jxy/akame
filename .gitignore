@@ -3,3 +3,4 @@
 bazel-*/*
 /bazel-*
 /rust/target
+/rust/akame-build

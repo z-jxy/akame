@@ -9,4 +9,11 @@ edition = "2021"
 anyhow = "1.0.72"
 nom = "7.1.3"
 rustyline = "8.0.0"
-inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm13-0"] }
+inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm16-0"] }
+clap = { version = "4.3.19", features = ["derive"] }
+#[target.'cfg(unix)'.dependencies]
+#inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm13-0"] }
+
+# dependencies for macos
+# [target.aarch64-apple-darwin.dependencies]
+# inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm16-0"] }

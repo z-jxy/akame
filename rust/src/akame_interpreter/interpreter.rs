@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{ast::{Statement, Expression}, types::integer::Integer, parsers::parse_program};
+use crate::{ types::integer::Integer, parsers::parse_program, llvm::ast::{Stmt, Expr, BinaryOp}};
 
 pub struct Interpreter {
     symbol_table: HashMap<String, Value>,  // assuming all variables are i32 for simplicity
@@ -54,10 +54,10 @@ impl Interpreter {
         }
     }
 
-    fn visit_expr(&mut self, expr: &Expression) -> anyhow::Result<Value> {
+    fn visit_expr(&mut self, expr: &Expr) -> anyhow::Result<Value> {
         match expr {
-            Expression::Number(n) => Ok(Value::Number(n.clone())),
-            Expression::Identifier(ident) => {
+            Expr::Num(n) => Ok(Value::Number(Integer::Int(n.clone()))),
+            Expr::Ident(ident) => {
                 let value = self.symbol_table.get(ident);
                 match value {
                     Some(value) => Ok(value.to_owned()),
@@ -67,7 +67,8 @@ impl Interpreter {
                     },
                 }
             },
-            Expression::Infix(left, op, right) => {
+         
+            Expr::Infix(left, op, right) => {
                 let left_value;
                 let right_value;
                 {
@@ -76,17 +77,17 @@ impl Interpreter {
                     match (&left_value, &right_value) {
                         (Value::Number(left), Value::Number(right)) => {
                             let (left, right) = (left.clone(), right.clone());
-                            return match op.as_str() {
-                                "+" => Ok(Value::Number(left + right)),
-                                "-" => Ok(Value::Number(left - right)),
-                                "*" => Ok(Value::Number(left * right)),
-                                "/" => Ok(Value::Number(left / right)),
+                            return match op {
+                                BinaryOp::Add => Ok(Value::Number(left + right)),
+                                BinaryOp::Subtract=> Ok(Value::Number(left - right)),
+                                BinaryOp::Multiply => Ok(Value::Number(left * right)),
+                                BinaryOp::Divide => Ok(Value::Number(left / right)),
                                 _ => Err(anyhow::anyhow!("Unexpected operator: {}", op)),
                             };
                         },
                         (Value::Str(left), Value::Str(right)) => {
-                            return match op.as_str() {
-                                "+" => Ok(Value::Str(format!("{}{}", left, right).into())),
+                            return match op {
+                                BinaryOp::Add => Ok(Value::Str(format!("{}{}", left, right).into())),
                                 _ => Err(anyhow::anyhow!("Unexpected operator: {}", op)),
                             };
                         },
@@ -94,9 +95,10 @@ impl Interpreter {
                     }
                 }
             },
-            Expression::Char(c) => Ok(Value::Char(*c)),
-            Expression::String(s) => Ok(Value::Str(s.clone().into())),
-            Expression::Call(name, args) => {
+           
+            Expr::Char(c) => Ok(Value::Char(*c)),
+            Expr::Str(s) => Ok(Value::Str(s.clone().into())),
+            Expr::Call(name, args) => {
                 match self.call_function(name.as_str(), args) {
                     Ok(value) => Ok(value),
                     Err(err) => Err(err),
@@ -105,7 +107,7 @@ impl Interpreter {
         }
     }
 
-    fn call_function(&mut self, name: &str, args: &[Expression]) -> anyhow::Result<Value> {
+    fn call_function(&mut self, name: &str, args: &[Expr]) -> anyhow::Result<Value> {
         //println!("calling function: {}", name);
         match name {
             "println!" => {
@@ -179,18 +181,18 @@ impl Interpreter {
     }
 
 
-    fn visit_stmt(&mut self, stmt: &Statement) -> anyhow::Result<Value> {
+    fn visit_stmt(&mut self, stmt: &Stmt) -> anyhow::Result<Value> {
         match stmt {
-            Statement::Let(ident, expr) => {
+            Stmt::Assignment{ident, expr } => {
                 let value = self.visit_expr(&expr)?;
                 self.symbol_table.insert(ident.clone(), value.clone());
                 Ok(value)
             },
-            Statement::Expr(expr) 
-            | Statement::Return(expr) => {
+            Stmt::Expression(expr) 
+            | Stmt::Return(expr) => {
                 Ok(self.visit_expr(&expr)?)
             },
-
+            /*
             Statement::Print(expr) => {
                 // check if the variable already exists in the symbol table
                 if let Expression::Identifier(ident) = expr {
@@ -208,10 +210,11 @@ impl Interpreter {
                 // if not in the table, we need to visit the expression
                 return handle_value(&self.visit_expr(&expr)?)
             },
+             */
 
-            Statement::Function(name, params, body) => {
+            Stmt::FunctionDeclaration{ ident, params, body } => {
                 let value: Value = Value::Function(params.to_owned(), body.to_owned());
-                self.symbol_table.insert(name.to_owned(), value.to_owned());
+                self.symbol_table.insert(ident.to_owned(), value.to_owned());
                 Ok(Value::None)
             },
         }
@@ -296,7 +299,7 @@ pub enum Value {
     Number(Integer),
     Str(Box<str>),
     Char(char),
-    Function(Vec<String>, Vec<Statement>),
+    Function(Vec<String>, Vec<Stmt>),
     Return(Box<Value>),
     None,
 
@@ -314,8 +317,8 @@ impl std::fmt::Display for Value {
                 params,
                 body,
             ) => write!(f, "fn({}) {{\n{}\n}}", params.join(", "), body.iter().map(|stmt| {
-                if let Statement::Expr(expr) = stmt {
-                    format!("{}", expr)
+                if let Stmt::Expression(expr) = stmt {
+                    format!("{:?}", expr)
                 } else {
                     format!("{:?}", stmt)
                 }

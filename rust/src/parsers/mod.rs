@@ -1,6 +1,6 @@
 use nom::{IResult, multi::separated_list0, bytes::complete::tag, branch::alt, character::complete::multispace1, error::context};
 
-use crate::ast::Statement;
+use crate::{ llvm::ast::Stmt};
 
 use self::functions::parse_statement;
 
@@ -27,6 +27,6 @@ fn statement_delimiter(input: &str) -> IResult<&str, &str> {
     Ok((input, ""))
 }
 
-pub fn parse_program(input: &str) -> IResult<&str, Vec<Statement>> {
+pub fn parse_program(input: &str) -> IResult<&str, Vec<Stmt>> {
     separated_list0(statement_delimiter, parse_statement)(input)
 }

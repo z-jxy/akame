@@ -1,3 +1,4 @@
+/*
 use crate::types::integer::Integer;
 
 // ignore dead code
@@ -61,10 +62,4 @@ enum ASTNode {
     Number(i32),
     Call(String, Vec<ASTNode>),  // function name, arguments
 }
-
-use inkwell::OptimizationLevel;
-use inkwell::builder::Builder;
-use inkwell::context::Context;
-use inkwell::execution_engine::{ExecutionEngine, JitFunction};
-use inkwell::module::Module;
-use std::error::Error;
+ */

@@ -1,34 +1,39 @@
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_until};
-use nom::character::complete::{alpha1, char, alphanumeric0, anychar, digit1};
-use nom::combinator::{recognize, map};
+use nom::character::complete::{alpha1, char, alphanumeric0, anychar, digit1, multispace0};
+use nom::combinator::{recognize, map, opt};
 
 use nom::sequence::{delimited, tuple};
 use nom::{IResult, Parser};
 
-use crate::ast::Expression;
+
+use crate::llvm::ast::Expr;
 use crate::types::integer::{parse_large_integer, Integer, try_parse_number};
 
-pub fn parse_identifier(input: &str) -> IResult<&str, Expression> {
+pub fn parse_identifier(input: &str) -> IResult<&str, Expr> {
+    let (input, _) = multispace0(input)?; // consume whitespace
     map(
         recognize(
             tuple((
-                alt((alpha1, tag("_"))),
+                alt((
+                    alpha1, 
+                    tag("_")
+                )),
                 alphanumeric0,
             ))
         ),
-        |s: &str| Expression::Identifier(s.to_string())
+        |s: &str| Expr::Ident(s.to_string())
     )(input)
 }
 
-pub fn get_identifier(e: Expression) -> Option<String> {
+pub fn get_identifier(e: Expr) -> Option<String> {
     match e {
-        Expression::Identifier(s) => Some(s),
+        Expr::Ident(s) => Some(s),
         _ => None,
     }
 }
 
-pub fn parse_number(input: &str) -> IResult<&str, Expression> {
+pub fn parse_number(input: &str) -> IResult<&str, Expr> {
     let (input, num_str) = digit1(input)?;
     let number = match num_str {
         s if try_parse_number::<i8>(s).is_some() => Integer::Int8(try_parse_number::<i8>(s).unwrap()),
@@ -43,24 +48,25 @@ pub fn parse_number(input: &str) -> IResult<&str, Expression> {
             }
         }
     };
-    Ok((input, Expression::Number(number)))
-}
+    let i_value = try_parse_number::<i32>(num_str).unwrap();
+    Ok((input, Expr::Num(i_value)))
+} 
 
 
 
-pub fn parse_string(input: &str) -> IResult<&str, Expression> {
+pub fn parse_string(input: &str) -> IResult<&str, Expr> {
     let (input, s) = delimited(char('"'), take_until("\""), char('"'))(input)?;
-    Ok((input, Expression::String(s.to_string())))
+    Ok((input, Expr::Str(s.to_string())))
 }
 
 
-pub fn parse_char(input: &str) -> IResult<&str, Expression> {
+pub fn parse_char(input: &str) -> IResult<&str, Expr> {
     delimited(tag("'"), anychar, tag("'"))
-        .map(|c| Expression::Char(c))
+        .map(|c| Expr::Char(c))
         .parse(input)
 }
 
-pub fn parse_variable(input: &str) -> IResult<&str, Expression> {
+pub fn parse_variable(input: &str) -> IResult<&str, Expr> {
     alt((
         parse_identifier,
         parse_number,

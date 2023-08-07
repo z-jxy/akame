@@ -1,13 +1,13 @@
 use nom::{branch::alt, multi::separated_list0};
 use nom::bytes::complete::tag;
 use nom::character::complete::multispace0;
-use nom::combinator::opt;
 use nom::error::context;
 
 use nom::sequence::delimited;
 use nom::IResult;
 
-use crate::ast::Expression;
+
+use crate::llvm::ast::Expr;
 
 
 use super::tokens::{
@@ -19,7 +19,7 @@ use super::tokens::{
     get_identifier,
 };
 
-pub fn parse_function_call(input: &str) -> IResult<&str, Expression> {
+pub fn parse_function_call(input: &str) -> IResult<&str, Expr> {
     let (input, name) = parse_identifier(input)?;
     let (input, args) = delimited(
         tag("("), 
@@ -27,10 +27,10 @@ pub fn parse_function_call(input: &str) -> IResult<&str, Expression> {
         expression),
          tag(")"))(input)?;
     let id = get_identifier(name).unwrap();
-    Ok((input, Expression::Call(id, args)))
+    Ok((input, Expr::Call(id, args)))
 }
 
-fn parse_primary_expr(input: &str) -> IResult<&str, Expression> {
+fn parse_primary_expr(input: &str) -> IResult<&str, Expr> {
     alt((
         parse_identifier,
         parse_number,
@@ -40,7 +40,7 @@ fn parse_primary_expr(input: &str) -> IResult<&str, Expression> {
     ))(input)
 }
 
-fn parse_infix_expr(input: &str) -> IResult<&str, Expression> {
+fn parse_infix_expr(input: &str) -> IResult<&str, Expr> {
     let (input, left) = parse_variable(input)?;
     let (input, _) = multispace0(input)?;
     let (input, op) = alt((
@@ -58,11 +58,14 @@ fn parse_infix_expr(input: &str) -> IResult<&str, Expression> {
     let (input, _) = multispace0(input)?;
     let (input, right) = parse_variable(input)?;
     let (input, _) = multispace0(input)?;
-    let (input, _) = opt(tag(";"))(input)?;
-    Ok((input, Expression::Infix(Box::new(left), op.to_string(), Box::new(right))))
+
+    let infix = Expr::Infix(Box::new(left), op.into(), Box::new(right));
+    //let (input, _) = opt(tag(";"))(input)?;
+    Ok((input, infix))
 }
 
-pub fn expression(input: &str) -> IResult<&str, Expression> {
+
+pub fn expression(input: &str) -> IResult<&str, Expr> {
     context(
         "expr", 
         alt((
