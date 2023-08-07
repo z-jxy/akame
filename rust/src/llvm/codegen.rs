@@ -18,7 +18,7 @@ pub fn codegen() {
     //compiler.module.add_function("printd", fn_type, None)
 
     // we get this from libc 
-    let printf_type = compiler.context.i32_type().fn_type(
+    let printf_type = compiler.context.i8_type().fn_type(
         &[compiler.context.i8_type().ptr_type(AddressSpace::default()).into()],
         true
     );
@@ -42,7 +42,8 @@ pub fn codegen() {
             params: vec!["argc".to_string(), "argv".to_string()],
             body: vec![
                 Stmt::Expression(Expr::Call("hello".to_string(), Box::new(Expr::Num(5)))),
-                Stmt::Expression(Expr::Call("printf".to_string(), Box::new(Expr::Var("argc".to_string())))),
+                Stmt::Expression(Expr::Call("printf".to_string(), Box::new(Expr::Str("helloWorld".to_string())))),
+                Stmt::Return(Expr::Num(0)),
             ],
         },
         Stmt::Assignment {

@@ -7,7 +7,7 @@ pub enum Expr {
     Call(String, Box<Expr>),
     Var(String),
     Str(String),
-    Print(Box<Expr>), 
+    //Print(Box<Expr>), 
 }
 
 pub enum Stmt {
@@ -20,8 +20,9 @@ pub enum Stmt {
         ident: String,
         expr: Expr,
     },
-    Print(String),
+    //Print(String),
     Expression(Expr),
+    Return(Expr),
 }
 
 #[derive(Debug, Clone)]

@@ -30,13 +30,36 @@ impl<'ctx> Compiler<'ctx> {
 
     fn compile_expr(&self, expr: &Expr) -> inkwell::values::BasicValueEnum<'ctx> {
         match expr {
+            //Expr::Str(s) => {
+            //    let string_val = self.context.const_string(s.as_bytes(), false);
+            //    let global_str = self.module.add_global(string_val.get_type(), Some             (AddressSpace::default()), "global_string");
+            //    global_str.set_initializer(&string_val);
+            //    global_str.as_pointer_value().into()
+            //},
             Expr::Str(s) => {
-                let string_val = self.context.const_string(s.as_bytes(), false);
-                let global_str = self.module.add_global(string_val.get_type(), Some             (AddressSpace::default()), "global_string");
-                global_str.set_initializer(&string_val);
-                global_str.as_pointer_value().into()
-            },
-            Expr::Num(n) => self.context.i32_type().const_int(*n as u64, false).into(),
+                // Create a global constant for the string with a null terminator
+                let global_string = self.module.add_global(
+                    self.context.i8_type().array_type((s.len() + 1) as u32),
+                    None,
+                    &format!("str_{}", s)
+                );
+                global_string.set_initializer(&self.context.const_string(s.as_bytes(), true));
+
+                let gep_indices = [
+                    self.context.i32_type().const_zero(), // For the first dimension (since it's a global array)
+                    self.context.i32_type().const_zero()  // For the first character of the string
+                ];
+        
+                // Return a pointer to the start of the string
+                //let zero = self.context.i32_type().const_int(0, false);
+                unsafe {
+                    inkwell::values::BasicValueEnum::PointerValue(self.builder.build_gep(global_string.as_pointer_value(), &gep_indices, "str_ptr"))   
+                }
+            }
+            Expr::Num(n) => self.context
+                .i32_type()
+                .const_int(*n as u64, false)
+                .into(),
             Expr::Add(left, right) => {
                 let left_value = self.compile_expr(left).into_int_value();
                 let right_value = self.compile_expr(right).into_int_value();
@@ -66,18 +89,22 @@ impl<'ctx> Compiler<'ctx> {
                     panic!("Variable not found in symbol table");
                 }
             },
-            Expr::Print(expr) => {
-                let value = self.compile_expr(expr);
-                let function = self.module.get_function("printd").unwrap();
-                self.builder.build_call(function, &[value.into()], "calltmp");
-                value
-            }
+            //Expr::Print(expr) => {
+            //    let value = self.compile_expr(expr);
+            //    let function = self.module.get_function("printd").unwrap();
+            //    self.builder.build_call(function, &[value.into()], "calltmp");
+            //    value
+            //}
         }
     }
 
     pub fn compile(&mut self, stmts: &[Stmt]) {
         for stmt in stmts {
             match stmt {
+                Stmt::Return(expr) => {
+                    let value = self.compile_expr(expr);
+                    self.builder.build_return(Some(&value));
+                },
                 Stmt::FunctionDeclaration { ident: name, params, body } => {
                     let param_types = vec![self.context.i32_type().into(); params.len()];
                     let fn_type = self.context.i32_type().fn_type(&param_types, false);
@@ -138,7 +165,7 @@ impl<'ctx> Compiler<'ctx> {
                         self.builder.build_return(Some(&value));
                     } else {
                         // Alternatively, you can have a default return value or handle this case differently
-                        self.builder.build_return(Some(&self.context.i64_type().const_int(0, false)));
+                        self.builder.build_return(Some(&self.context.i32_type().const_int(0, false)));
                     }
 
             
@@ -165,53 +192,53 @@ impl<'ctx> Compiler<'ctx> {
                 },
 
 
-                Stmt::Print(var_name) => {
-                    if let Some(value) = self.variables.get(var_name) {
-                        let i32_type = self.context.i32_type();
-                        let fn_type = i32_type.fn_type(&[i32_type.into()], false);
-                        let printd_func = self.module.add_function("printd", fn_type, None);
-                        // Print variable value if it exists
-                        match value {
-                            VariableValue::Int(value) => {
-                                let value = value.clone();
-                                self.builder
-                                    .build_call(
-                                        printd_func, 
-                                        &[value.into()], 
-                                        "printd_call");
-
-                            },
-                            VariableValue::Str(value) => println!("{} => {}", var_name, value),
-                        }
-                    } else {
-                        // Try to execute it as a function
-                        let i32_type = self.context.i32_type();
-                        let fn_type = i32_type.fn_type(&[i32_type.into()], false);
-                        let printd_func = self.module.add_function("printd", fn_type, None);
-                        unsafe {
-                            if let Ok(hello_function) =
-                                self.execution_engine
-                                    .get_function::<unsafe extern "C" fn(i32) -> i32>(var_name)
-                            {
-                                let result = hello_function.call(5);
-                                //assert_eq!(result, 10);
-                                // print the output in stdout from final executable
-                                let v = self.context.i32_type().const_int(result.try_into().unwrap(), false);
-                                self.builder
-                                .build_call(
-                                    printd_func, 
-                                    &[v.into()], 
-                                    "printd_call");
-
-
-                                //println!("{} => {}", var_name, result);
-                            } else {
-                                //println!("Error: Cannot print '{}'", var_name);
-                            }
-                        }
-                    }
-                    //println!("variables: {:#?}", self.variables);
-                }
+                //Stmt::Print(var_name) => {
+                //    if let Some(value) = self.variables.get(var_name) {
+                //        let i32_type = self.context.i32_type();
+                //        let fn_type = i32_type.fn_type(&[i32_type.into()], //false);
+                //        let printd_func = self.module.add_function("printd", //fn_type, None);
+                //        // Print variable value if it exists
+                //        match value {
+                //            VariableValue::Int(value) => {
+                //                let value = value.clone();
+                //                self.builder
+                //                    .build_call(
+                //                        printd_func, 
+                //                        &[value.into()], 
+                //                        "printd_call");
+//
+                //            },
+                //            VariableValue::Str(value) => println!("{} => {}", var_name, value),
+                //        }
+                //    } else {
+                //        // Try to execute it as a function
+                //        let i32_type = self.context.i32_type();
+                //        let fn_type = i32_type.fn_type(&[i32_type.into()], //false);
+                //        let printd_func = self.module.add_function("printd", //fn_type, None);
+                //        unsafe {
+                //            if let Ok(hello_function) =
+                //                self.execution_engine
+                //                    .get_function::<unsafe extern "C" fn(i32) -> i32>(var_name)
+                //            {
+                //                let result = hello_function.call(5);
+                //                //assert_eq!(result, 10);
+                //                // print the output in stdout from final executable
+                //                let v = self.context.i32_type().const_int(result.//try_into().unwrap(), false);
+                //                self.builder
+                //                .build_call(
+                //                    printd_func, 
+                //                    &[v.into()], 
+                //                    "printd_call");
+//
+//
+                //                //println!("{} => {}", var_name, result);
+                //            } else {
+                //                //println!("Error: Cannot print '{}'", var_name);
+                //            }
+                //        }
+                //    }
+                //    //println!("variables: {:#?}", self.variables);
+                //}
             }
         }
     }
