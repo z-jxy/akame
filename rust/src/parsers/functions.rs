@@ -37,7 +37,7 @@ impl fmt::Display for Expr {
 }
 /// parse the required function declaration ()
 fn parse_function(input: &str) -> IResult<&str, Stmt> {
-    //let (input, _) = ws(tag("fn"))(input)?;
+    
     let (input, _) = multispace0(input)?;
     let (input, ident) = parse_identifier(input)
         .expect("Missing identifier in function declaration");
@@ -47,30 +47,70 @@ fn parse_function(input: &str) -> IResult<&str, Stmt> {
         separated_list0(tag(","), parse_identifier), 
         tag(")")
     )(input)?;
-    let (input, _) = multispace0(input)?;
-    let (input, _left_brace) = tag("{")(input)?;
-    let (input, _) = multispace0(input)?;
-    let (input, body) = many0(ws(parse_statement))(input)?;
-    let (input, _) = opt(tag(";"))(input)?;
-    let (input, _) = opt(multispace0)(input)?;
-    let (input, _right_brace) = tag("}")(input)?;
-    let params = params.into_iter().map(|expr| {
-        if let Expr::Ident(s) = expr {
-            s
-        } else {
-            panic!("Expecting identifier in function parameter list")
-        }
-    }).collect();
+    //if let Expr::Ident(fn_name) = ident {
+    //    if fn_name == "main" && params.len() != 0 {
+    //        panic!("main function must have no parameters")
+    //    }
+    //}
 
-    if let Expr::Ident(s) = ident {
-        Ok((input, Stmt::FunctionDeclaration{
-            ident: s,
-            params,
-            body,
-        }))
-    } else {
-        panic!("Expecting identifier in function declaration")
+    match ident {
+        Expr::Ident(fn_name) => {
+            
+            if fn_name == "main" && params.len() != 0 {
+                panic!("main function must have no parameters")
+            }
+
+            let (input, _) = multispace0(input)?;
+            let (input, _left_brace) = tag("{")(input)?;
+            let (input, _) = multispace0(input)?;
+            let (input, body) = many0(ws(parse_statement))(input)?;
+            let (input, _) = opt(tag(";"))(input)?;
+            let (input, _) = opt(multispace0)(input)?;
+            let (input, _right_brace) = tag("}")(input)?;
+            let params = params.into_iter().map(|expr| {
+                if let Expr::Ident(s) = expr {
+                    s
+                } else {
+                    panic!("Expecting identifier in function parameter list")
+                }
+            }).collect();
+
+
+
+            Ok((input, Stmt::FunctionDeclaration{
+                ident: fn_name,
+                params,
+                body,
+            }))
+
+        }
+        _ => panic!("Expecting identifier in function declaration")
     }
+    
+    //let (input, _) = multispace0(input)?;
+    //let (input, _left_brace) = tag("{")(input)?;
+    //let (input, _) = multispace0(input)?;
+    //let (input, body) = many0(ws(parse_statement))(input)?;
+    //let (input, _) = opt(tag(";"))(input)?;
+    //let (input, _) = opt(multispace0)(input)?;
+    //let (input, _right_brace) = tag("}")(input)?;
+    //let params = params.into_iter().map(|expr| {
+    //    if let Expr::Ident(s) = expr {
+    //        s
+    //    } else {
+    //        panic!("Expecting identifier in function parameter list")
+    //    }
+    //}).collect();
+//
+    //if let Expr::Ident(s) = ident {
+    //    Ok((input, Stmt::FunctionDeclaration{
+    //        ident: s,
+    //        params,
+    //        body,
+    //    }))
+    //} else {
+    //    panic!("Expecting identifier in function declaration")
+    //}
 }
 
 fn parse_function_declaration(input: &str) -> IResult<&str, Stmt> {

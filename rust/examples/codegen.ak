@@ -2,7 +2,7 @@ fn hello(num) {
     return num + 5;
 }
 
-fn main(argc, argv) {
+fn main() {
     let number = hello(3);
-    printf(argc);
+    printd(number);
 }
