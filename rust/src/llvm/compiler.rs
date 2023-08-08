@@ -1,4 +1,4 @@
-use inkwell::{execution_engine::ExecutionEngine, context::Context, AddressSpace, values::{BasicValue, BasicValueEnum}, OptimizationLevel, types::BasicType};
+use inkwell::{execution_engine::ExecutionEngine, context::Context, AddressSpace, values::{BasicValue, BasicValueEnum}, OptimizationLevel, types::{BasicType, VoidType, AnyType}};
 
 use super::ast::{Stmt, Expr, VariableValue, BinaryOp};
 
@@ -58,7 +58,7 @@ impl<'ctx> Compiler<'ctx> {
 
     fn add_print_string_fn(&self) {
         let i8_ptr_type = self.context.i8_type().ptr_type(AddressSpace::default());
-        let void_type = self.context.void_type();
+        let void_type = self.context.i32_type();
         
         // Define function type for our wrapper
         let fn_type = void_type.fn_type(&[i8_ptr_type.into()], false);
@@ -214,7 +214,7 @@ impl<'ctx> Compiler<'ctx> {
          */
     }
 
-    fn compile_expr(&self, expr: &Expr) -> inkwell::values::BasicValueEnum<'ctx> {
+    fn compile_expr(&self, expr: &Expr) -> BasicValueEnum<'ctx> {
         match expr {
             Expr::Str(s) => {
                 let string_val = self.context.const_string(s.as_bytes(), false);
@@ -317,11 +317,14 @@ impl<'ctx> Compiler<'ctx> {
                 let result = self
                     .builder
                     .build_call(function, args.as_slice(), "calltmp");
+                //let ret_type = function.get_type()
+                 //   .get_return_type().expect("No return type found");
                 match result.try_as_basic_value().left() {
                     Some(value) => value.into(),
                     None => {
                         //panic!("Expected integer value from function call.: {:#?}", result);
-                        self.context.i32_type().const_int(0, false).into()
+                        // it's a void reutrn so we shou;dn't return anything
+                        BasicValueEnum::PointerValue(self.context.i32_type().ptr_type(AddressSpace::default()).const_zero())
                     },
                 }
             }

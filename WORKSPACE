@@ -1,7 +1,6 @@
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
 # To find additional information on this release or newer ones visit:
 # https://github.com/bazelbuild/rules_rust/releases
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 http_archive(
     name = "rules_rust",
     sha256 = "9d04e658878d23f4b00163a72da3db03ddb451273eb347df7d7c50838d698f49",
