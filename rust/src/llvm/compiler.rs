@@ -123,6 +123,33 @@ impl<'ctx> Compiler<'ctx> {
                 global_str.set_initializer(&string_val);
                 global_str.as_pointer_value().into()
             },
+            Expr::Array(array) => {
+                todo!("array")
+                /*
+                let array_type = array.get_type().into_array_type();
+                let array_val = self.context.arra(array_type, &array.iter().map(|e| self.compile_expr(e)).collect::<Vec<_>>());
+                let global_array = self.module.add_global(array_val.get_type(), Some(AddressSpace::default()), "global_array");
+                global_array.set_initializer(&array_val);
+                global_array.as_pointer_value().into()
+                 */
+            },
+            Expr::ArrayIndexing(array, index) => {
+                todo!("array indexing")
+                //let array_val = self.compile_expr(array).into_array_value();
+                //let index_val = self.compile_expr(index);
+                //let gep = unsafe {
+                //    self.builder.build_gep(
+                //        array_val.into_pointer_value().get_type().get_element_type().//into_pointer_type(),
+                //        array_val.into_pointer_value(), 
+                //        &[index_val.into()], 
+                //        "array_indexing")
+                //};
+                //self.builder.build_load(
+                //    gep.get_type().get_element_type(),
+                //    gep, 
+                //    "array_indexing_load")
+            },
+
             Expr::QualifiedIdent(idents) => {
                 todo!()
                 //let mut var = self.variables.get(&idents[0].name).unwrap();

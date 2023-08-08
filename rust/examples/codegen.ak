@@ -4,7 +4,8 @@ fn hello(num) {
 
 fn main() {
     let ee = "hello";
-    let e4 = std::args;
+    let arr = [1, 2, 3];
+    let value = arr[1];
     let number = hello(3);
     printd(number);
 }

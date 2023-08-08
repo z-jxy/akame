@@ -12,6 +12,7 @@ use crate::llvm::ast::Expr;
 
 use super::ParseResult;
 
+use super::array::{parse_array, parse_array_indexing};
 use super::tokens::{
     parse_identifier, 
     parse_number, 
@@ -36,8 +37,10 @@ pub fn parse_function_call(input: &str) -> ParseResult<&str, Expr> {
 
 pub fn parse_primary_expr(input: &str) -> ParseResult<&str, Expr> {
     alt((
+        parse_array_indexing,
         parse_qualified_identifier,
         parse_identifier,
+        parse_array,
         parse_number,
         parse_string,
         parse_char,

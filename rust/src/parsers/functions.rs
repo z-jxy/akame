@@ -36,6 +36,8 @@ impl fmt::Display for Expr {
             Expr::Infix(op, left, right) => write!(f, "Infix({} {} {})", op, left, right),
             Expr::Call(ident, args) => write!(f, "Call({} {})", ident, args.iter().map(|e| format!("{}", e)).collect::<Vec<String>>().join(", ")),
             Expr::QualifiedIdent(idents) => write!(f, "QualifiedIdent({:#?})", idents),
+            Expr::ArrayIndexing(array, index) => write!(f, "ArrayIndexing({} {})", array, index),
+            Expr::Array(array) => write!(f, "Array({})", array.iter().map(|e| format!("{}", e)).collect::<Vec<String>>().join(", ")),
         }
     }
 }

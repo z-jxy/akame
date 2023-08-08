@@ -67,6 +67,27 @@ impl Interpreter {
                     },
                 }
             },
+            Expr::Array(array) => {
+                let mut values = Vec::new();
+                for expr in array {
+                    values.push(self.visit_expr(expr)?);
+                }
+                Ok(Value::Array(values))
+            },
+            Expr::ArrayIndexing(array, index) => {
+                let array = self.visit_expr(array)?;
+                let index = self.visit_expr(index)?;
+                match (&array, &index) {
+                    (Value::Array(array), Value::Number(Integer::Int(index))) => {
+                        let index = *index as usize;
+                        if index >= array.len() {
+                            return Err(anyhow::anyhow!("Index out of bounds: {}", index));
+                        }
+                        Ok(array[index].to_owned())
+                    },
+                    _ => Err(anyhow::anyhow!("Invalid array indexing: {}[{}]", array, index)),
+                }
+            },
             Expr::QualifiedIdent(idents) => todo!(),
          
             Expr::Infix(left, op, right) => {
@@ -302,6 +323,7 @@ pub enum Value {
     Char(char),
     Function(Vec<String>, Vec<Stmt>),
     Return(Box<Value>),
+    Array(Vec<Value>),
     None,
 
     // You can add more types here in future.
@@ -326,6 +348,16 @@ impl std::fmt::Display for Value {
             }).collect::<Vec<String>>().join("\n")),
             Value::None => Ok(()),
             Value::Return(_) => Ok(()),
+            Value::Array(values) => {
+                write!(f, "[")?;
+                for (i, value) in values.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", value)?;
+                }
+                write!(f, "]")
+            },
         }
     }
 }

@@ -1,17 +1,16 @@
-
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Num(i32),
-    //Add(Box<Expr>, Box<Expr>),
     Call(String, Vec<Expr>), // should this be a box?
-    //Var(String),
     Str(String),
     Ident(String),
     QualifiedIdent(Vec<String>),
     Char(char),
     Infix(Box<Expr>, BinaryOp, Box<Expr>),
-    //Print(Box<Expr>), 
+
+    Array(Vec<Expr>),             // Represents an array literal, e.g., [1, "hello", 'c']
+    ArrayIndexing(Box<Expr>, Box<Expr>), // Represents array indexing, e.g., arr[2]
+
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -25,7 +24,6 @@ pub enum Stmt {
         ident: String,
         expr: Expr,
     },
-    //Print(String),
     Expression(Expr),
     Return(Expr),
 }

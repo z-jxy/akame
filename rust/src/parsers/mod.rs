@@ -12,6 +12,7 @@ mod tokens;
 mod expressions;
 mod error;
 mod full_test;
+mod array;
 
 pub type ParseResult<I, O> = IResult<I, O, CustomError<I>>;
 
