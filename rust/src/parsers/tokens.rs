@@ -3,11 +3,14 @@ use nom::bytes::complete::{tag, take_until};
 use nom::character::complete::{alpha1, char, alphanumeric0, anychar, digit1, multispace0};
 use nom::combinator::{recognize, map};
 
+use nom::multi::separated_list1;
 use nom::sequence::{delimited, tuple};
 use nom::Parser;
 
 
 use crate::llvm::ast::Expr;
+
+
 use crate::types::integer::{parse_large_integer, Integer, try_parse_number};
 
 use super::ParseResult;
@@ -17,15 +20,38 @@ pub fn parse_identifier(input: &str) -> ParseResult<&str, Expr> {
     map(
         recognize(
             tuple((
-                alt((
-                    alpha1, 
-                    tag("_")
-                )),
-                alphanumeric0,
+                        alt((
+                            alpha1, 
+                            tag("_")
+                        )),
+                        alphanumeric0,
             ))
         ),
         |s: &str| Expr::Ident(s.to_string())
     )(input)
+}
+
+pub fn parse_qualified_identifier(input: &str) -> ParseResult<&str, Expr> {
+    let (input, _) = multispace0(input)?;
+
+    let mut identifier = recognize(
+        tuple((
+            alt((alpha1, tag("_"))),
+            alphanumeric0
+        ))
+    );
+
+    let (input, first_part) = identifier(input)?;
+    let (input, _) = tag("::")(input)?;
+    //println!("first part: {}", first_part);
+    let (input, remaining_parts) = separated_list1(tag("::"), identifier)(input)?;
+    //println!("remaining parts: {:?}", remaining_parts);
+    let mut idents = vec![first_part.to_string()];
+    idents.extend(remaining_parts.into_iter().map(|s: &str| s.to_string()));
+    //println!("idents: {:?}", idents);
+    let (input, _) = multispace0(input)?;
+    //println!("input: {:#?}", input);
+    Ok((input, Expr::QualifiedIdent(idents)))
 }
 
 pub fn get_identifier(e: Expr) -> Option<String> {
@@ -70,10 +96,12 @@ pub fn parse_char(input: &str) -> ParseResult<&str, Expr> {
 
 pub fn parse_variable(input: &str) -> ParseResult<&str, Expr> {
     alt((
+        //parse_qualified_identifier,
         parse_identifier,
         parse_number,
         parse_string,
         parse_char,
+        //parse_qualified_identifier,
         //delimited(tag("("), expr, tag(")")),
     ))(input)
 }

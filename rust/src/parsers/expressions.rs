@@ -18,22 +18,25 @@ use super::tokens::{
     parse_string, 
     parse_char, 
     parse_variable, 
-    get_identifier,
+    get_identifier, parse_qualified_identifier,
 };
 
 pub fn parse_function_call(input: &str) -> ParseResult<&str, Expr> {
     let (input, name) = parse_identifier(input)?;
+    let (input, _) = multispace0(input)?;
     let (input, args) = delimited(
         tag("("), 
-        separated_list0(tag(","), 
-        expression),
-         tag(")"))(input)?;
+        separated_list0(tag(","), expression),
+        tag(")")
+    )(input)?;
     let id = get_identifier(name).unwrap();
     Ok((input, Expr::Call(id, args)))
 }
 
-fn parse_primary_expr(input: &str) -> ParseResult<&str, Expr> {
+
+pub fn parse_primary_expr(input: &str) -> ParseResult<&str, Expr> {
     alt((
+        parse_qualified_identifier,
         parse_identifier,
         parse_number,
         parse_string,
@@ -42,8 +45,9 @@ fn parse_primary_expr(input: &str) -> ParseResult<&str, Expr> {
     ))(input)
 }
 
-fn parse_infix_expr(input: &str) -> ParseResult<&str, Expr> {
-    let (input, left) = parse_variable(input)?;
+pub fn parse_infix_expr(input: &str) -> ParseResult<&str, Expr> {
+    let (input, _) = multispace0(input)?;
+    let (input, left) =  parse_variable(input)?;
     let (input, _) = multispace0(input)?;
     let (input, op) = alt((
         tag("+"),

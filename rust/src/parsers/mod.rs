@@ -4,32 +4,24 @@ use nom::{IResult, multi::separated_list0, bytes::complete::tag, branch::alt, ch
 
 use crate::llvm::ast::Stmt;
 
-use self::{functions::parse_statement, error::CustomError};
+use self::{ error::CustomError, functions::{parse_function_declaration, parse_expr_statement}, statements::{parse_return_statement, parse_let_statement}};
 
 mod functions;
 mod statements;
 mod tokens;
 mod expressions;
 mod error;
+mod full_test;
 
 pub type ParseResult<I, O> = IResult<I, O, CustomError<I>>;
-
-
-fn consume_whitespace(input: &str) -> ParseResult<&str, &str> {
-    multispace1(input)
-}
 
 fn statement_delimiter(input: &str) -> ParseResult<&str, &str> {
     let (input, _) = context(
         "stripper", alt((
-        tag(";"),
-        tag("\n"),
-        tag("\r\n"),
-        tag("\r"),
-        tag("\t"),
-        multispace1
-    )))(input)?;
-    let (input, _) = consume_whitespace(input)?;
+            tag(";"),
+            multispace1
+        ))
+    )(input)?;
     Ok((input, ""))
 }
 
@@ -44,3 +36,17 @@ pub fn parse_program(input: &str) -> anyhow::Result<Vec<Stmt>> {
     }
         
 }
+
+pub fn parse_statement(input: &str) -> ParseResult<&str, Stmt> {
+    context(
+        "statement",
+        alt((
+            parse_function_declaration,
+            parse_return_statement,
+            parse_let_statement,
+            parse_expr_statement,
+        )),
+    )(input)
+    .map(|(input, statement)| (input, statement))
+}
+

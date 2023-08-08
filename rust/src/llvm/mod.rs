@@ -21,12 +21,19 @@ pub fn emit(stmts: Vec<ast::Stmt>) {
 	codegen::emit_from_statements(stmts);
 }
 
-pub fn compile_ast(ast: Vec<ast::Stmt>) {
+pub fn compile_ast(ast: Vec<ast::Stmt>)-> anyhow::Result<()> {
 	let context = Context::create();
     let mut compiler = Compiler::new(&context);
+	
+	// add the standard library to the compiler
 	compiler.add_stdlib();
 
+	// compile the ast
     compiler.compile(&ast);
+	// wrap the users main function in a function called __entry, this is the entry point for the program
+	compiler.emit_main_function();
+
+
 	println!("[*] Emitted to LLVM IR 1/2");
 
 	let build_out = "akame-build";
@@ -50,7 +57,7 @@ pub fn compile_ast(ast: Vec<ast::Stmt>) {
 	compiler.module.print_to_file(std::path::Path::new(&ir_out)).unwrap();
 
 
-	Command::new("clang")
+	let output = Command::new("clang")
 		// set the entry point to our _entry function which wraps the users main function
 		.arg("-Wl,-e,__entry")
 		// set the output file to build/main 
@@ -60,8 +67,18 @@ pub fn compile_ast(ast: Vec<ast::Stmt>) {
 		.arg(ir_out)
 		.output()
 		.expect("failed to execute process");
-	
 
-	println!("[+] Successfully compiled to build/main 2/2")
+	match output.status.success() {
+		true => {
+			println!("[+] [2/2] Successfully compiled to build/main");
+			Ok(())
+		},
+		false => {
+			println!("[-] Failed to compile to build/main 2/2");
+			println!("[-] Error: {}", String::from_utf8_lossy(&output.stderr));
+			Err(anyhow::anyhow!("[-] Error: {}", String::from_utf8_lossy(&output.stderr)))
+		},
+	}
+	
 
 }

@@ -1,13 +1,13 @@
-use core::panic;
+
 use std::fmt;
 
-use nom::branch::alt;
+
 use nom::bytes::complete::tag;
 
 
 use nom::character::complete::multispace0;
 use nom::combinator::opt;
-use nom::error::context;
+
 use nom::multi::{separated_list0, many0};
 use nom::sequence::delimited;
 
@@ -17,12 +17,12 @@ use crate::llvm::ast::{Expr, Stmt};
 use crate::parsers::tokens::parse_identifier;
 
 
-use super::ParseResult;
+use super::{ParseResult, parse_statement};
 
 use super::error::CustomError;
 use super::expressions::expression;
 
-use super::statements::{parse_return_statement, parse_let_statement};
+use super::statements::space_opt;
 
 
 
@@ -35,96 +35,67 @@ impl fmt::Display for Expr {
             Expr::Char(c) => write!(f, "Char({})", c),
             Expr::Infix(op, left, right) => write!(f, "Infix({} {} {})", op, left, right),
             Expr::Call(ident, args) => write!(f, "Call({} {})", ident, args.iter().map(|e| format!("{}", e)).collect::<Vec<String>>().join(", ")),
+            Expr::QualifiedIdent(idents) => write!(f, "QualifiedIdent({:#?})", idents),
         }
     }
 }
+
+fn parse_parameters(input: &str) -> ParseResult<&str, Vec<String>> {
+    let (input, params) = space_opt(delimited(
+        tag("("),
+        separated_list0(space_opt(tag(",")), parse_identifier),
+        tag(")")
+    ))(input)?;
+
+    let parsed_params = params.into_iter().map(|expr| {
+        if let Expr::Ident(s) = expr {
+            Ok(s)
+        } else {
+            Err(nom::Err::Failure(CustomError::UnexpectedToken("Expected identifier in function parameter list")))
+        }
+    }).collect::<Result<_, _>>()?;
+
+    Ok((input, parsed_params))
+}
+
+fn parse_function_body(input: &str) -> ParseResult<&str, Vec<Stmt>> {
+    let (input, _) = multispace0(input)?;
+    let (input, _) = tag("{")(input)?;
+    let (input, _) = multispace0(input)?;
+    let (input, body) = many0(ws(parse_statement))(input)?;
+    let (input, _) = opt(tag(";"))(input)?;
+    let (input, _) = opt(multispace0)(input)?;
+    let (input, _) = tag("}")(input)?;
+
+    Ok((input, body))
+}
+
+fn parse_function_name(input: &str) -> ParseResult<&str, String> {
+    let (input, ident) = space_opt(parse_identifier)(input)?;
+    match &ident {
+        Expr::Ident(id) => Ok((input, id.clone())),
+        _ => Err(nom::Err::Failure(CustomError::UnexpectedToken("Expected identifier in function declaration"))),
+    }
+}
+
 /// parse the required function declaration ()
 fn parse_function(input: &str) -> ParseResult<&str, Stmt> {
-    
-    let (input, _) = multispace0(input)?;
-    let (input, ident) = parse_identifier(input)
-        .expect("Missing identifier in function declaration");
-    let (input, _) = multispace0(input)?;
-    let (input, params) = delimited(
-        tag("("), 
-        separated_list0(tag(","), parse_identifier), 
-        tag(")")
-    )(input)?;
-    //if let Expr::Ident(fn_name) = ident {
-    //    if fn_name == "main" && params.len() != 0 {
-    //        panic!("main function must have no parameters")
-    //    }
-    //}
-
-    match ident {
-        Expr::Ident(fn_name) => {
-
-            if fn_name == "main" && params.len() != 0 {
-                //eprintln!("main function must have no parameters");
-                return Err(nom::Err::Failure(CustomError::MainFunctionWithParams(input)));
-            }
-
-            let (input, _) = multispace0(input)?;
-            let (input, _left_brace) = tag("{")(input)?;
-            let (input, _) = multispace0(input)?;
-            let (input, body) = many0(ws(parse_statement))(input)?;
-            let (input, _) = opt(tag(";"))(input)?;
-            let (input, _) = opt(multispace0)(input)?;
-            let (input, _right_brace) = tag("}")(input)?;
-            let params = params.into_iter().map(|expr| {
-                if let Expr::Ident(s) = expr {
-                    s
-                } else {
-                    panic!("Expecting identifier in function parameter list")
-                }
-            }).collect();
-
-
-
-            Ok((input, Stmt::FunctionDeclaration{
-                ident: fn_name,
-                params,
-                body,
-            }))
-
-        }
-        _ => panic!("Expecting identifier in function declaration")
+    let (input, ident) = parse_function_name(input)?;
+    let (input, params) = parse_parameters(input)?;
+    if ident == "main" && !params.is_empty() {
+        return Err(nom::Err::Failure(CustomError::MainFunctionWithParams(input)));
     }
-    
-    //let (input, _) = multispace0(input)?;
-    //let (input, _left_brace) = tag("{")(input)?;
-    //let (input, _) = multispace0(input)?;
-    //let (input, body) = many0(ws(parse_statement))(input)?;
-    //let (input, _) = opt(tag(";"))(input)?;
-    //let (input, _) = opt(multispace0)(input)?;
-    //let (input, _right_brace) = tag("}")(input)?;
-    //let params = params.into_iter().map(|expr| {
-    //    if let Expr::Ident(s) = expr {
-    //        s
-    //    } else {
-    //        panic!("Expecting identifier in function parameter list")
-    //    }
-    //}).collect();
-//
-    //if let Expr::Ident(s) = ident {
-    //    Ok((input, Stmt::FunctionDeclaration{
-    //        ident: s,
-    //        params,
-    //        body,
-    //    }))
-    //} else {
-    //    panic!("Expecting identifier in function declaration")
-    //}
+    let (input, body) = parse_function_body(input)?;
+    Ok((input, Stmt::FunctionDeclaration{ ident, params, body }))
 }
 
-fn parse_function_declaration(input: &str) -> ParseResult<&str, Stmt> {
+pub fn parse_function_declaration(input: &str) -> ParseResult<&str, Stmt> {
     let (input, _) = ws(tag("fn"))(input)?;
-    //let function = function(input).expect("Error parsing function declaration");
     parse_function(input)
 }
 
 
-fn parse_expr_statement(input: &str) -> ParseResult<&str, Stmt> {
+pub fn parse_expr_statement(input: &str) -> ParseResult<&str, Stmt> {
     let (input, expr) = expression(input)?;
     Ok((input, Stmt::Expression(expr)))
 }
@@ -142,15 +113,4 @@ where
 }
 
 
-pub fn parse_statement(input: &str) -> ParseResult<&str, Stmt> {
-    context(
-        "statement",
-        alt((
-            parse_function_declaration,
-            parse_return_statement,
-            parse_let_statement,
-            parse_expr_statement,
-        )),
-    )(input)
-    .map(|(input, statement)| (input, statement))
-}
+

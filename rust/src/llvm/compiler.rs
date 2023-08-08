@@ -117,38 +117,66 @@ impl<'ctx> Compiler<'ctx> {
 
     fn compile_expr(&self, expr: &Expr) -> inkwell::values::BasicValueEnum<'ctx> {
         match expr {
-            //Expr::Str(s) => {
-            //    let string_val = self.context.const_string(s.as_bytes(), false);
-            //    let global_str = self.module.add_global(string_val.get_type(), Some             (AddressSpace::default()), "global_string");
-            //    global_str.set_initializer(&string_val);
-            //    global_str.as_pointer_value().into()
-            //},
             Expr::Str(s) => {
-                // Create a global constant for the string with a null terminator
+                let string_val = self.context.const_string(s.as_bytes(), false);
+                let global_str = self.module.add_global(string_val.get_type(), Some             (AddressSpace::default()), "global_string");
+                global_str.set_initializer(&string_val);
+                global_str.as_pointer_value().into()
+            },
+            Expr::QualifiedIdent(idents) => {
+                todo!()
+                //let mut var = self.variables.get(&idents[0].name).unwrap();
+                //for ident in &idents[1..] {
+                //    match var {
+                //        VariableValue::Struct(struct_val) => {
+                //            let struct_type = struct_val.get_type().into_struct_type();
+                //            let index = struct_type.get_field_index(ident.name).unwrap();
+                //            var = VariableValue::StructField(struct_val, index);
+                //        },
+                //        _ => panic!("Not a struct")
+                //    }
+                //}
+                //match var {
+                //    VariableValue::Int(val) => val.into(),
+                //    VariableValue::StructField(struct_val, index) => {
+                //        let struct_type = struct_val.get_type().into_struct_type();
+                //        let gep = unsafe {
+                //            self.builder.build_struct_gep(struct_val, index as u32, //"struct_field_gep")
+                //        };
+                //        self.builder.build_load(gep, "struct_field_load")
+                //    },
+                //    _ => panic!("Not a struct")
+                //}
+            },
+            /*
+            Expr::Str(s) => {
+                    // Create a global constant for the string with a null terminator
+                let array_type = self.context.i8_type().array_type((s.len() + 1) as u32);
                 let global_string = self.module.add_global(
-                    self.context.i8_type().array_type((s.len() + 1) as u32),
+                    array_type,
                     None,
                     &format!("str_{}", s)
                 );
                 global_string.set_initializer(&self.context.const_string(s.as_bytes(), true));
-
+            
                 let gep_indices = [
                     self.context.i32_type().const_zero(), // For the first dimension (since it's a global array)
                     self.context.i32_type().const_zero()  // For the first character of the string
                 ];
-        
+            
                 // Return a pointer to the start of the string
-                unsafe {
-                    inkwell::values::BasicValueEnum::PointerValue(
-                        self.builder
-                        .build_gep(
-                            self.context.i8_type().array_type((s.len() + 1) as u32),
-                            global_string.as_pointer_value(), 
-                            &gep_indices, 
-                            "str_ptr")
-                    )   
-                }
+                let ptr = unsafe {
+                    self.builder.build_gep(
+                        self.context.i8_type(), // Pointee type
+                        global_string.as_pointer_value(), 
+                        &gep_indices, 
+                        "str_ptr"
+                    )
+                };
+                inkwell::values::BasicValueEnum::PointerValue(ptr)
+
             }
+             */
             Expr::Num(n) => self.context
                 .i32_type()
                 .const_int(*n as u64, false)
@@ -166,6 +194,7 @@ impl<'ctx> Compiler<'ctx> {
             }
             Expr::Ident(var_name) => match self.variables.get(var_name) {
                 Some(VariableValue::Int(value)) => BasicValueEnum::IntValue(*value),
+                Some(VariableValue::Ptr(value)) => BasicValueEnum::PointerValue(*value),
                 Some(VariableValue::Str(referenced_var)) => {
                     match self.variables.get(referenced_var) {
                         Some(VariableValue::Int(referenced_value)) => BasicValueEnum::IntValue(*referenced_value),
@@ -193,8 +222,7 @@ impl<'ctx> Compiler<'ctx> {
                     }
                 }
                 None => {
-                    println!("Variable {} not found in symbol table", var_name);
-                    panic!("Variable not found in symbol table");
+                    panic!("Variable: {var_name} not found in symbol table");
                 }
             },
             Expr::Char(c) => {
@@ -212,12 +240,7 @@ impl<'ctx> Compiler<'ctx> {
                     //"%" => self.builder.build_int_signed_rem(left_value, right_value, "modtmp").into(),
                 }
             }
-            //Expr::Print(expr) => {
-            //    let value = self.compile_expr(expr);
-            //    let function = self.module.get_function("printd").unwrap();
-            //    self.builder.build_call(function, &[value.into()], "calltmp");
-            //    value
-            //}
+
         }
     }
 
@@ -251,11 +274,20 @@ impl<'ctx> Compiler<'ctx> {
                         match stmt {
                             Stmt::Assignment { ident: var_name, expr } => {
                                 let value = self.compile_expr(expr);
-                                self.variables
-                                    .insert(var_name.clone(), VariableValue::Int(value.into_int_value()));
-                                //if is_last_expr {
-                                //    last_value = Some(value.into());
-                                //}
+                                match value {
+                                    BasicValueEnum::IntValue(int_val) => {
+                                        self.variables
+                                            .insert(var_name.clone(), VariableValue::Int(int_val));
+                                    },
+                                    BasicValueEnum::PointerValue(ptr_val) => {
+                                        // If you want to refine further, you might check the type of the pointer
+                                        // but for now, we'll assume any pointer is a string
+                                        self.variables
+                                            .insert(var_name.clone(), VariableValue::Ptr(ptr_val));
+                                    },
+                                    // Add other types as necessary
+                                    _ => panic!("Unsupported assignment type for variable {}", var_name),
+                                }
                             },
                             Stmt::Return(expr) => {
                                 let value = self.compile_expr(expr);
@@ -269,21 +301,6 @@ impl<'ctx> Compiler<'ctx> {
                                     }
                                 }
                             },
-                            //Expr::Call(func_name, arg) => {
-                            //    let function = self.module.get_function(func_name).unwrap();
-                            //    let arg_value = self.compile_expr(arg);
-                            //    let call_result = self.builder.build_call(function, &[arg_value.into()],                    "calltmp");
-
-                            //    if is_last_expr {
-                            //        last_value = call_result.try_as_basic_value().left();
-                            //    }
-                            //}
-                            //_ => {
-                            //    let value = self.compile_expr(expr);
-                            //    if is_last_expr {
-                            //        last_value = Some(value.into());
-                            //    }
-                            //}
                         }
                     }
 
@@ -299,20 +316,6 @@ impl<'ctx> Compiler<'ctx> {
                         // Alternatively, you can have a default return value or handle this case differently
                         self.builder.build_return(Some(&self.context.i32_type().const_int(0, false)));
                     }
-
-                    // Return the value of the last expression:
-                    /*
-                    if let Some(value) = last_value {
-                        self.builder.build_return(Some(&value));
-                    } else {
-                        // Alternatively, you can have a default return value or handle this case differently
-                        self.builder.build_return(Some(&self.context.i32_type().const_int(0, false)));
-                    }
-                     */
-            
-                    
-                    //self.builder.build_return(Some(&result));
-                    //unsafe { self.execution_engine.get_function("sum").ok() }
                 }
                 Stmt::Assignment { ident: var_name, expr } => {
                     match expr {
@@ -332,54 +335,6 @@ impl<'ctx> Compiler<'ctx> {
                     self.compile_expr(expr);
                 },
 
-
-                //Stmt::Print(var_name) => {
-                //    if let Some(value) = self.variables.get(var_name) {
-                //        let i32_type = self.context.i32_type();
-                //        let fn_type = i32_type.fn_type(&[i32_type.into()], //false);
-                //        let printd_func = self.module.add_function("printd", //fn_type, None);
-                //        // Print variable value if it exists
-                //        match value {
-                //            VariableValue::Int(value) => {
-                //                let value = value.clone();
-                //                self.builder
-                //                    .build_call(
-                //                        printd_func, 
-                //                        &[value.into()], 
-                //                        "printd_call");
-//
-                //            },
-                //            VariableValue::Str(value) => println!("{} => {}", var_name, value),
-                //        }
-                //    } else {
-                //        // Try to execute it as a function
-                //        let i32_type = self.context.i32_type();
-                //        let fn_type = i32_type.fn_type(&[i32_type.into()], //false);
-                //        let printd_func = self.module.add_function("printd", //fn_type, None);
-                //        unsafe {
-                //            if let Ok(hello_function) =
-                //                self.execution_engine
-                //                    .get_function::<unsafe extern "C" fn(i32) -> i32>(var_name)
-                //            {
-                //                let result = hello_function.call(5);
-                //                //assert_eq!(result, 10);
-                //                // print the output in stdout from final executable
-                //                let v = self.context.i32_type().const_int(result.//try_into().unwrap(), false);
-                //                self.builder
-                //                .build_call(
-                //                    printd_func, 
-                //                    &[v.into()], 
-                //                    "printd_call");
-//
-//
-                //                //println!("{} => {}", var_name, result);
-                //            } else {
-                //                //println!("Error: Cannot print '{}'", var_name);
-                //            }
-                //        }
-                //    }
-                //    //println!("variables: {:#?}", self.variables);
-                //}
             }
         }
     }

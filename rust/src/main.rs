@@ -41,10 +41,15 @@ enum Commands {
         //#[arg(short, long, value_name = "FILE")]
         file: PathBuf,
     },
+    Parse {
+        /// Source to parse
+        //#[arg(short, long, value_name = "FILE")]
+        file: PathBuf,
+    }
 }
 
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     if let Some(file) = cli.file {
@@ -56,7 +61,9 @@ fn main() {
             let script = std::fs::read_to_string(file.as_path()).expect("Something went wrong reading the file");
             match akame_interpreter::parse(&script) {
                 Ok(ast) => {
-                    println!("AST: {:#?}", ast);
+                    if cli.debug > 0 {
+                        println!("AST: {:?}", ast);
+                    }
                     llvm::emit(ast)
                 },
                 Err(err) => {
@@ -65,12 +72,24 @@ fn main() {
                 }
             }
         },
+        Some(Commands::Parse { file }) => {
+            println!("[*] Parsing file: {}", file.display());
+            let script = std::fs::read_to_string(file.as_path()).expect("Something went wrong reading the file");
+            match akame_interpreter::parse(&script) {
+                Ok(ast) => {
+                    println!("AST: {:?}", ast);
+                },
+                Err(err) => {
+                    println!("Error: {:?}", err);
+                }
+            }
+        },
         Some(Commands::Compile { file }) => {
             println!("[*] Compiling: {:?}", file);
             let script = std::fs::read_to_string(file.as_path()).expect("Something went wrong reading the file");
             match akame_interpreter::parse(&script) {
                 Ok(ast) => {
-                    llvm::compile_ast(ast)
+                    llvm::compile_ast(ast)?;
                 },
                 Err(err) => {
                     println!("Error: {:?}", err);
@@ -111,4 +130,5 @@ fn main() {
     //        return;
     //    }
     //}
+    Ok(())
 }

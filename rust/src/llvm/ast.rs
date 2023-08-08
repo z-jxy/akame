@@ -1,6 +1,6 @@
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Num(i32),
     //Add(Box<Expr>, Box<Expr>),
@@ -8,12 +8,13 @@ pub enum Expr {
     //Var(String),
     Str(String),
     Ident(String),
+    QualifiedIdent(Vec<String>),
     Char(char),
     Infix(Box<Expr>, BinaryOp, Box<Expr>),
     //Print(Box<Expr>), 
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     FunctionDeclaration {
         ident: String,
@@ -33,6 +34,7 @@ pub enum Stmt {
 pub enum VariableValue<'ctx> {
     Int(inkwell::values::IntValue<'ctx>),
     Str(String),
+    Ptr(inkwell::values::PointerValue<'ctx>),
 }
 
 #[derive(Debug, PartialEq, Clone)]

@@ -67,6 +67,7 @@ impl Interpreter {
                     },
                 }
             },
+            Expr::QualifiedIdent(idents) => todo!(),
          
             Expr::Infix(left, op, right) => {
                 let left_value;
