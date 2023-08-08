@@ -1,3 +1,4 @@
+use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::multispace0;
 use nom::combinator::opt;
@@ -8,6 +9,7 @@ use nom::{InputTakeAtPosition, AsChar, Parser};
 
 
 use crate::llvm::ast::{Stmt, Expr};
+use crate::parsers::expressions::{parse_primary_expr, parse_function_call, parse_infix_expr};
 
 use super::ParseResult;
 use super::error::CustomError;
@@ -25,11 +27,19 @@ where
 }
 
 pub fn parse_let_statement(input: &str) -> ParseResult<&str, Stmt> {
+    println!("let stmnt input: {:?}", input);
     let (input, _) = space_opt(tag("let"))(input)?;
+    println!("its a let stmnt");
     let (input, ident) = space_opt(parse_identifier)(input)?;
+    println!("let after ident: {}", input);
+    println!("let stmnt IDENT: {:?}", ident);
     let (input, _) = space_opt(tag("="))(input)?;
-    let (input, expr) = space_opt(expression)(input)?;
+    println!("let after EQUALS: {}", input);
+    let (input, expr) = space_opt(alt((parse_function_call, parse_infix_expr, parse_primary_expr)))(input)?;
+    println!("let after expr: {}", input);
     let (input, _) = space_opt(tag(";"))(input)?;
+
+    println!("stmnt PARSED: {}", input);
 
     match ident {
         Expr::Ident(id) => Ok((input, Stmt::Assignment { ident: id, expr })),
@@ -40,7 +50,7 @@ pub fn parse_let_statement(input: &str) -> ParseResult<&str, Stmt> {
 pub fn parse_return_statement(input: &str) -> ParseResult<&str, Stmt> {
     let (input, _) = space_opt(tag("return"))(input)?;
     let (input, expr) = space_opt(expression)(input)?;
-    let (input, _) = space_opt(tag(";"))(input)?;
+    //let (input, _) = space_opt(tag(";"))(input)?;
     Ok((input, Stmt::Return(expr)))
 }
 

@@ -18,13 +18,13 @@ use super::ParseResult;
 pub fn parse_identifier(input: &str) -> ParseResult<&str, Expr> {
     let (input, _) = multispace0(input)?; // consume whitespace
     map(
-        recognize(
-            tuple((
-                        alt((
-                            alpha1, 
-                            tag("_")
-                        )),
-                        alphanumeric0,
+recognize(
+    tuple((
+                alt((
+                    alpha1, 
+                    tag("_")
+                )),
+                alphanumeric0,
             ))
         ),
         |s: &str| Expr::Ident(s.to_string())

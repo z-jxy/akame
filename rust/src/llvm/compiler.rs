@@ -1,4 +1,4 @@
-use inkwell::{execution_engine::ExecutionEngine, context::Context, AddressSpace, values::{BasicValue, BasicValueEnum}, OptimizationLevel};
+use inkwell::{execution_engine::ExecutionEngine, context::Context, AddressSpace, values::{BasicValue, BasicValueEnum}, OptimizationLevel, types::BasicType};
 
 use super::ast::{Stmt, Expr, VariableValue, BinaryOp};
 
@@ -9,7 +9,9 @@ pub struct Compiler<'ctx> {
     #[allow(dead_code)]
     execution_engine: ExecutionEngine<'ctx>,
     variables: std::collections::HashMap<String, VariableValue<'ctx>>,
-}
+}   
+
+const GLOBAL_ENTRY : &str = "_entry";
 
 impl<'ctx> Compiler<'ctx> {
     pub fn new(ctx: &'ctx Context) -> Compiler<'ctx> {
@@ -30,13 +32,41 @@ impl<'ctx> Compiler<'ctx> {
 
     // implementations for some stdlib functions we're going to make available
     pub fn add_stdlib(&self) {
+        self.add_printf();
+        self.add_printd();
+    }
+
+
+    pub fn get_runtime_args(&self) {
+        // lookup the entry point and get the args
+        let i32_type = self.context.i32_type();
+        let main_fn = self.module.get_function(GLOBAL_ENTRY).unwrap();
+        let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
+        let argv_1_ptr = unsafe {
+            self.builder.build_gep(
+                argv.get_type().get_context().i8_type().ptr_type(AddressSpace::default()),
+                argv, 
+                &[i32_type.const_int(1, false)], 
+                "argv_0_ptr")
+        };
+        let argv_0 = self.builder.build_load(
+            self.context.i8_type().ptr_type(AddressSpace::default()),
+            argv_1_ptr, 
+            "argv_0");
+    }
+
+
+
+    fn add_printf(&self) {
         // printf
         let printf_type = self.context.i8_type().fn_type(
             &[self.context.i8_type().ptr_type(AddressSpace::default()).into()],
             true
         );
         self.module.add_function("printf", printf_type, None);
+    }
 
+    fn add_printd(&self) {
         // Define printd
         let i32_type = self.context.i32_type();
         let fn_type = i32_type.fn_type(&[i32_type.into()], false);
@@ -64,11 +94,12 @@ impl<'ctx> Compiler<'ctx> {
         let i32_type = self.context.i32_type();
         let fn_type = i32_type.fn_type(&[i32_type.into(), i8_ptr_type.ptr_type(AddressSpace::default()).into()], false);
         
-        let main_fn = self.module.add_function("_entry", fn_type, None);
+        let main_fn = self.module.add_function(GLOBAL_ENTRY, fn_type, None);
         let entry = self.context.append_basic_block(main_fn, "entry");
         self.builder.position_at_end(entry);
     
         // Retrieve argv[0]
+        /*
         let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
         let argv_1_ptr = unsafe {
             self.builder.build_gep(
@@ -89,9 +120,12 @@ impl<'ctx> Compiler<'ctx> {
             printf_fn, 
             &[format_str.as_basic_value_enum().into(), argv_0.into()], 
             "printf_call");
+        */
+    }
 
+    pub fn link_user_main_to_entry(&self) {
         let user_defined_main = self.module.get_function("main")
-            .expect("main function not found");
+        .expect("main function not found");
 
         // Call user-defined main with no args
         self.builder.build_call(
@@ -99,20 +133,8 @@ impl<'ctx> Compiler<'ctx> {
             &[], 
             "user_main_call");
 
-
-        // Create a new stack frame for the function
-
-        // Create a new basic block for the function
-
-
-        // Call the user-defined main function
-
-        // Return the value from the user-defined main function
-
-
-    
         // Return 0 from main
-        self.builder.build_return(Some(&i32_type.const_int(0, false)));
+        self.builder.build_return(Some(&self.context.i32_type().const_int(0, false)));
     }
 
     fn compile_expr(&self, expr: &Expr) -> inkwell::values::BasicValueEnum<'ctx> {
@@ -124,86 +146,88 @@ impl<'ctx> Compiler<'ctx> {
                 global_str.as_pointer_value().into()
             },
             Expr::Array(array) => {
-                todo!("array")
-                /*
-                let array_type = array.get_type().into_array_type();
-                let array_val = self.context.arra(array_type, &array.iter().map(|e| self.compile_expr(e)).collect::<Vec<_>>());
-                let global_array = self.module.add_global(array_val.get_type(), Some(AddressSpace::default()), "global_array");
-                global_array.set_initializer(&array_val);
+                // Here, we're assuming all elements of your array are of the same type.
+                // We'll compile the first expression to get its type, 
+                // then use it to create the LLVM array type.
+                let element = self.compile_expr(&array[0]);
+                let array_type = element.get_type().array_type(array.len() as u32);
+
+                //let array_vals: Vec<_> = array.iter().map(|e| self.compile_expr(e)).collect();
+                
+                
+                let array_vals: Vec<_> = array.iter().map(|e| self.compile_expr(e)).collect();
+                
+                // Create a constant array with the given values.
+               // let const_array = array_type.const_array(&array_values);
+                
+                // Create a global instance of the array and set its initializer.
+                let global_array = self.module.add_global(array_type, Some(AddressSpace::default()), "global_array");
+                global_array.set_initializer(&array_vals[0]);
+                
+                // Return the global array's pointer.
                 global_array.as_pointer_value().into()
-                 */
             },
             Expr::ArrayIndexing(array, index) => {
-                todo!("array indexing")
-                //let array_val = self.compile_expr(array).into_array_value();
-                //let index_val = self.compile_expr(index);
-                //let gep = unsafe {
-                //    self.builder.build_gep(
-                //        array_val.into_pointer_value().get_type().get_element_type().//into_pointer_type(),
-                //        array_val.into_pointer_value(), 
-                //        &[index_val.into()], 
-                //        "array_indexing")
-                //};
-                //self.builder.build_load(
-                //    gep.get_type().get_element_type(),
-                //    gep, 
-                //    "array_indexing_load")
-            },
-
-            Expr::QualifiedIdent(idents) => {
-                todo!()
-                //let mut var = self.variables.get(&idents[0].name).unwrap();
-                //for ident in &idents[1..] {
-                //    match var {
-                //        VariableValue::Struct(struct_val) => {
-                //            let struct_type = struct_val.get_type().into_struct_type();
-                //            let index = struct_type.get_field_index(ident.name).unwrap();
-                //            var = VariableValue::StructField(struct_val, index);
-                //        },
-                //        _ => panic!("Not a struct")
-                //    }
-                //}
-                //match var {
-                //    VariableValue::Int(val) => val.into(),
-                //    VariableValue::StructField(struct_val, index) => {
-                //        let struct_type = struct_val.get_type().into_struct_type();
-                //        let gep = unsafe {
-                //            self.builder.build_struct_gep(struct_val, index as u32, //"struct_field_gep")
-                //        };
-                //        self.builder.build_load(gep, "struct_field_load")
-                //    },
-                //    _ => panic!("Not a struct")
-                //}
-            },
-            /*
-            Expr::Str(s) => {
-                    // Create a global constant for the string with a null terminator
-                let array_type = self.context.i8_type().array_type((s.len() + 1) as u32);
-                let global_string = self.module.add_global(
-                    array_type,
-                    None,
-                    &format!("str_{}", s)
-                );
-                global_string.set_initializer(&self.context.const_string(s.as_bytes(), true));
+                let array_val_pointer = self.compile_expr(array).into_pointer_value();
+                let index_val = self.compile_expr(index).into_int_value();
             
-                let gep_indices = [
-                    self.context.i32_type().const_zero(), // For the first dimension (since it's a global array)
-                    self.context.i32_type().const_zero()  // For the first character of the string
-                ];
-            
-                // Return a pointer to the start of the string
-                let ptr = unsafe {
+                // You might have a function like this:
+                let element_type = self.context.i32_type().ptr_type(AddressSpace::default()); // This function returns the BasicType of the element.
+                
+                let gep = unsafe {
                     self.builder.build_gep(
-                        self.context.i8_type(), // Pointee type
-                        global_string.as_pointer_value(), 
-                        &gep_indices, 
-                        "str_ptr"
+                        element_type,
+                        array_val_pointer,
+                        &[index_val],
+                        "array_indexing"
                     )
                 };
-                inkwell::values::BasicValueEnum::PointerValue(ptr)
-
+                self.builder.build_load(
+                    element_type,
+                    gep, 
+                    "array_indexing_load"
+                )
             }
-             */
+            Expr::QualifiedIdent(idents) => {
+                // Assuming idents is a Vec<String> or similar
+
+                if let Some(first_ident) = idents.first() {
+                    if first_ident == "std" {
+                        // Handle std library functions
+                        if let Some(second_ident) = idents.get(1) {
+                            match second_ident.as_str() {
+                                "printf" => {
+                                    let printf_fn = self.module.get_function("printf").expect("printf function not found");
+                                    let format_str = self.add_string_format_global();
+                                    self.builder.build_call(
+                                        printf_fn, 
+                                        &[format_str.as_basic_value_enum().into()], 
+                                        "printf_call");
+                                    return self.context.i32_type().const_int(0, false).into();
+                                },
+                                "args" => {
+                                        // Get argv (pointer to arguments array)
+                                        let main_fn = self.module.get_function(GLOBAL_ENTRY).unwrap();
+                                        let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
+                                        // Return the argv pointer directly
+                                        argv.into()
+                                }
+                                _ => panic!("Unknown std function: {}", second_ident),
+                            } 
+                        }   else {
+                            // Handle error: no identifier
+                            panic!("No identifier found");
+                        }
+                    } else {
+                        // Handle error: no identifier
+                        panic!("No identifier found");
+                    }
+                } else {
+                    // Handle error: no identifier
+                    panic!("No identifier found");
+                }
+
+            },
             Expr::Num(n) => self.context
                 .i32_type()
                 .const_int(*n as u64, false)

@@ -1,13 +1,15 @@
+use nom::combinator::opt;
 use nom::{branch::alt, multi::separated_list0};
 use nom::bytes::complete::tag;
 use nom::character::complete::multispace0;
 use nom::error::context;
 
-use nom::sequence::delimited;
+use nom::sequence::{delimited, tuple};
 
 
 
 use crate::llvm::ast::Expr;
+use crate::parsers::statements::space_opt;
 
 
 use super::ParseResult;
@@ -23,7 +25,9 @@ use super::tokens::{
 };
 
 pub fn parse_function_call(input: &str) -> ParseResult<&str, Expr> {
-    let (input, name) = parse_identifier(input)?;
+    //println!("parse_function_call INPUT: {}", input);
+    let (input, name) = space_opt(parse_identifier)(input)?;
+    //println!("parse_function_call NAME: {}", name);
     let (input, _) = multispace0(input)?;
     let (input, args) = delimited(
         tag("("), 
@@ -31,6 +35,7 @@ pub fn parse_function_call(input: &str) -> ParseResult<&str, Expr> {
         tag(")")
     )(input)?;
     let id = get_identifier(name).unwrap();
+    
     Ok((input, Expr::Call(id, args)))
 }
 
@@ -76,14 +81,20 @@ pub fn parse_infix_expr(input: &str) -> ParseResult<&str, Expr> {
 
 pub fn expression(input: &str) -> ParseResult<&str, Expr> {
     context(
-        "expr", 
-        alt((
-            parse_function_call,
-            parse_infix_expr,
-            parse_primary_expr,
+        "expr",
+        tuple((
+                alt((
+                    parse_function_call,
+                    parse_infix_expr,
+                    parse_primary_expr,
+                )),
+            opt(tuple((
+                tag(";"),
+                multispace0,
+            )))
         ))
     )(input)
-        .map(|(input, expr)| 
+        .map(|(input, (expr, _))| 
         (input, expr)
     )
 }

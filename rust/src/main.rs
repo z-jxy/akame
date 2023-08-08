@@ -77,7 +77,7 @@ fn main() -> anyhow::Result<()> {
             let script = std::fs::read_to_string(file.as_path()).expect("Something went wrong reading the file");
             match akame_interpreter::parse(&script) {
                 Ok(ast) => {
-                    println!("AST: {:?}", ast);
+                    println!("AST: {:#?}", ast);
                 },
                 Err(err) => {
                     println!("Error: {:?}", err);

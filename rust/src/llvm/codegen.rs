@@ -15,8 +15,9 @@ pub fn emit_from_statements(ast: Vec<Stmt>) {
 
     compiler.add_stdlib();
     
-    compiler.compile(&ast);
-    compiler.emit_main_function();
+    compiler.emit_main_function(); // create the real entry point
+    compiler.compile(&ast); // compile users code
+    compiler.link_user_main_to_entry(); // link users main to the real entry point
     //compiler.module.print_to_file(std::path::Path::new("main.ll")).unwrap();
     println!("{}", compiler.module.print_to_string().to_string());
 }

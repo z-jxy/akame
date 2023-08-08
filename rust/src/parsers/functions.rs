@@ -98,6 +98,7 @@ pub fn parse_function_declaration(input: &str) -> ParseResult<&str, Stmt> {
 
 
 pub fn parse_expr_statement(input: &str) -> ParseResult<&str, Stmt> {
+    println!("parse_expr_statement: {}", input);
     let (input, expr) = expression(input)?;
     Ok((input, Stmt::Expression(expr)))
 }

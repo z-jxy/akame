@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::{llvm::ast::{Expr, BinaryOp}, parsers::parse_program};
-    use crate::llvm::ast::Stmt;
+    use crate::{llvm::ast::{Expr, BinaryOp, Stmt}, parsers::parse_program};
 
     #[test]
     fn test_function_declarations() -> anyhow::Result<()> {
@@ -12,13 +11,14 @@ mod tests {
 
         fn main() {
             let ee = "hello";
-            let e4 = std::args;
+            let value = std::args[1];
+            printf(value);
             let number = hello(3);
             printd(number);
         }
         "#;
 
-        let parsed = parse_program(input)?;  // Assuming you have a function called `parse_program`
+        let parsed = parse_program(input)?;
 
         let expected = vec![
             Stmt::FunctionDeclaration {
@@ -26,7 +26,7 @@ mod tests {
                 params: vec!["num".to_string()],
                 body: vec![Stmt::Return(Expr::Infix(
                     Box::new(Expr::Ident("num".to_string())),
-                    BinaryOp::Add,  // Assuming you have an Operator enum
+                    BinaryOp::Add,  
                     Box::new(Expr::Num(5)),
                 ))],
             },
@@ -39,9 +39,16 @@ mod tests {
                         expr: Expr::Str("hello".to_string()),
                     },
                     Stmt::Assignment {
-                        ident: "e4".to_string(),
-                        expr: Expr::QualifiedIdent(vec!["std".to_string(), "args".to_string()]),
+                        ident: "value".to_string(),
+                        expr: Expr::ArrayIndexing(
+                            Box::new(Expr::QualifiedIdent(vec!["std".to_string(), "args".to_string()])),
+                            Box::new(Expr::Num(1))
+                        ),
                     },
+                    Stmt::Expression(Expr::Call(
+                        "printf".to_string(),
+                        vec![Expr::Ident("value".to_string())],
+                    )),
                     Stmt::Assignment {
                         ident: "number".to_string(),
                         expr: Expr::Call(
