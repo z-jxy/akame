@@ -1,4 +1,4 @@
-use inkwell::{execution_engine::ExecutionEngine, context::Context, AddressSpace, values::{BasicValue, BasicValueEnum}, OptimizationLevel, types::{BasicType, VoidType, AnyType}};
+use inkwell::{execution_engine::ExecutionEngine, context::Context, AddressSpace, values::{BasicValue, BasicValueEnum, AnyValueEnum, AnyValue}, OptimizationLevel, types::{BasicType, VoidType, AnyType, BasicTypeEnum}};
 
 use super::ast::{Stmt, Expr, VariableValue, BinaryOp};
 
@@ -58,7 +58,7 @@ impl<'ctx> Compiler<'ctx> {
 
     fn add_print_string_fn(&self) {
         let i8_ptr_type = self.context.i8_type().ptr_type(AddressSpace::default());
-        let void_type = self.context.i32_type();
+        let void_type = self.context.void_type();
         
         // Define function type for our wrapper
         let fn_type = void_type.fn_type(&[i8_ptr_type.into()], false);
@@ -84,7 +84,7 @@ impl<'ctx> Compiler<'ctx> {
             arg.into()], "printf_call");
     
         // Return
-        self.builder.build_return(Some(&self.context.i32_type().const_int(0, false)));
+        self.builder.build_return(None);
     }
 
 
@@ -142,41 +142,10 @@ impl<'ctx> Compiler<'ctx> {
 
         let argc = main_fn.get_nth_param(0).unwrap();
         let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
-        
-        // Sample usage: Retrieve argv[0] and print it
-        // let argv_0_ptr = unsafe {
-        //     self.builder.build_gep(
-        //         i8_ptr_type,
-        //         argv, 
-        //         &[i32_type.const_int(0, false)], 
-        //         "argv_0_ptr")
-        // };
+
         self.builder.build_store(argc_global.as_pointer_value(), argc);
         self.builder.build_store(argv_global.as_pointer_value(), argv);
-    
-        // Retrieve argv[0]
-        /*
-        let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
-        let argv_1_ptr = unsafe {
-            self.builder.build_gep(
-                argv.get_type().get_context().i8_type().ptr_type(AddressSpace::default()),
-                argv, 
-                &[i32_type.const_int(1, false)], 
-                "argv_0_ptr")
-        };
-        let argv_0 = self.builder.build_load(
-            self.context.i8_type().ptr_type(AddressSpace::default()),
-            argv_1_ptr, 
-            "argv_0");
-    
-        // Call printf
-        let printf_fn = self.module.get_function("printf").expect("printf function not found");
-        let format_str = self.add_string_format_global();
-        self.builder.build_call(
-            printf_fn, 
-            &[format_str.as_basic_value_enum().into(), argv_0.into()], 
-            "printf_call");
-        */
+
     }
 
     pub fn link_user_main_to_entry(&self) {
@@ -214,7 +183,7 @@ impl<'ctx> Compiler<'ctx> {
          */
     }
 
-    fn compile_expr(&self, expr: &Expr) -> BasicValueEnum<'ctx> {
+    fn compile_expr(&self, expr: &Expr) -> AnyValueEnum<'ctx> {
         match expr {
             Expr::Str(s) => {
                 let string_val = self.context.const_string(s.as_bytes(), false);
@@ -227,12 +196,12 @@ impl<'ctx> Compiler<'ctx> {
                 // We'll compile the first expression to get its type, 
                 // then use it to create the LLVM array type.
                 let element = self.compile_expr(&array[0]);
-                let array_type = element.get_type().array_type(array.len() as u32);
+                let array_type = element.get_type().into_array_type().array_type(array.len() as u32);
 
                 //let array_vals: Vec<_> = array.iter().map(|e| self.compile_expr(e)).collect();
                 
                 
-                let array_vals: Vec<_> = array.iter().map(|e| self.compile_expr(e)).collect();
+                let array_vals: Vec<_> = array.iter().map(|e| self.compile_expr(e).into_array_value()).collect();
                 
                 // Create a constant array with the given values.
                // let const_array = array_type.const_array(&array_values);
@@ -263,49 +232,18 @@ impl<'ctx> Compiler<'ctx> {
                     element_type,
                     gep, 
                     "array_indexing_load"
-                )
+                ).into()
             }
             Expr::QualifiedIdent(idents) => {
                 // Assuming idents is a Vec<String> or similar
-
                 if let Some(first_ident) = idents.first() {
-                    if first_ident == "std" {
-                        // Handle std library functions
-                        if let Some(second_ident) = idents.get(1) {
-                            match second_ident.as_str() {
-                                "printf" => {
-                                    let printf_fn = self.module.get_function("printf").expect("printf function not found");
-                                    let format_str = self.add_string_format_global();
-                                    self.builder.build_call(
-                                        printf_fn, 
-                                        &[format_str.as_basic_value_enum().into()], 
-                                        "printf_call");
-                                    return self.context.i32_type().const_int(0, false).into();
-                                },
-                                "args" => {
-                                    let argv_global = self.module.get_global("argv_global").expect("argv_global not found");
-
-                                    let argv_type = self.context.i8_type().ptr_type(AddressSpace::default()).ptr_type(AddressSpace::default());
-                                    let argv = self.builder.build_load(argv_type, argv_global.as_pointer_value(), "argv_val").into_pointer_value();
-
-                                    // return argv
-                                    return argv.into();
-                                }
-                                _ => panic!("Unknown std function: {}", second_ident),
-                            } 
-                        }   else {
-                            // Handle error: no identifier
-                            panic!("No identifier found");
-                        }
-                    } else {
-                        // Handle error: no identifier
-                        panic!("No identifier found");
+                    match first_ident.as_str() {
+                        "std" => self.stdlib(idents).expect("Unable to link to stdlib").into(),
+                        _ => panic!("Unknown qualified identifier: {}", first_ident),
                     }
                 } else {
-                    // Handle error: no identifier
-                    panic!("No identifier found");
+                    panic!("Empty qualified identifier");
                 }
-
             },
             Expr::Num(n) => self.context
                 .i32_type()
@@ -313,7 +251,7 @@ impl<'ctx> Compiler<'ctx> {
                 .into(),
             Expr::Call(func_name, arg) => {
                 let function = self.module.get_function(func_name).unwrap();
-                let args = arg.iter().map(|arg| self.compile_expr(arg).into()).collect::<Vec<inkwell::values::BasicMetadataValueEnum>>();
+                let args = arg.iter().map(|arg| self.compile_expr(arg).try_into().expect("Unable to try into basic BasicMetadataValueEnum for call")).collect::<Vec<inkwell::values::BasicMetadataValueEnum>>();
                 let result = self
                     .builder
                     .build_call(function, args.as_slice(), "calltmp");
@@ -324,16 +262,17 @@ impl<'ctx> Compiler<'ctx> {
                     None => {
                         //panic!("Expected integer value from function call.: {:#?}", result);
                         // it's a void reutrn so we shou;dn't return anything
-                        BasicValueEnum::PointerValue(self.context.i32_type().ptr_type(AddressSpace::default()).const_zero())
+                 
+                        AnyValueEnum::PointerValue(self.context.i32_type().ptr_type(AddressSpace::default()).const_zero())
                     },
                 }
             }
             Expr::Ident(var_name) => match self.variables.get(var_name) {
-                Some(VariableValue::Int(value)) => BasicValueEnum::IntValue(*value),
-                Some(VariableValue::Ptr(value)) => BasicValueEnum::PointerValue(*value),
+                Some(VariableValue::Int(value)) => AnyValueEnum::IntValue(*value),
+                Some(VariableValue::Ptr(value)) => AnyValueEnum::PointerValue(*value),
                 Some(VariableValue::Str(referenced_var)) => {
                     match self.variables.get(referenced_var) {
-                        Some(VariableValue::Int(referenced_value)) => BasicValueEnum::IntValue(*referenced_value),
+                        Some(VariableValue::Int(referenced_value)) => AnyValueEnum::IntValue(*referenced_value),
                         Some(VariableValue::Str(s)) => {
                             let gep_indices = [
                                 self.context.i32_type().const_zero(), // For the first dimension (since it's a global array)
@@ -343,7 +282,7 @@ impl<'ctx> Compiler<'ctx> {
                             // Return a pointer to the start of the string
 
                             unsafe {
-                                inkwell::values::BasicValueEnum::PointerValue(
+                                inkwell::values::AnyValueEnum::PointerValue(
                                     self.builder
                                     .build_gep(
                                         self.context.i8_type().array_type((s.len() + 1) as u32),
@@ -385,10 +324,22 @@ impl<'ctx> Compiler<'ctx> {
             match stmt {
                 Stmt::Return(expr) => {
                     let value = self.compile_expr(expr);
-                    self.builder.build_return(Some(&value));
+                    if value.get_type().is_void_type() {
+                        self.builder.build_return(None);
+                    } else {
+                        match value {
+                            AnyValueEnum::IntValue(i) => {
+                                self.builder.build_return(Some(&i));
+                            },
+                            AnyValueEnum::PointerValue(p) => {
+                                self.builder.build_return(Some(&p));
+                            },
+                            _ => panic!("Unknown return type: {:#?}", value),
+                        }
+                    };
                 },
                 Stmt::FunctionDeclaration { ident: name, params, body } => {
-                    let param_types = vec![self.context.i32_type().into(); params.len()];
+                    let param_types: Vec<inkwell::types::BasicMetadataTypeEnum<'_>> = vec![self.context.i32_type().into(); params.len()];
                     let fn_type = self.context.i32_type().fn_type(&param_types, false);
                     let function = self.module.add_function(name, fn_type, None);
                     let entry = self.context.append_basic_block(function, "entry");
@@ -411,11 +362,11 @@ impl<'ctx> Compiler<'ctx> {
                             Stmt::Assignment { ident: var_name, expr } => {
                                 let value = self.compile_expr(expr);
                                 match value {
-                                    BasicValueEnum::IntValue(int_val) => {
+                                    AnyValueEnum::IntValue(int_val) => {
                                         self.variables
                                             .insert(var_name.clone(), VariableValue::Int(int_val));
                                     },
-                                    BasicValueEnum::PointerValue(ptr_val) => {
+                                    AnyValueEnum::PointerValue(ptr_val) => {
                                         // If you want to refine further, you might check the type of the pointer
                                         // but for now, we'll assume any pointer is a string
                                         self.variables
@@ -427,13 +378,25 @@ impl<'ctx> Compiler<'ctx> {
                             },
                             Stmt::Return(expr) => {
                                 let value = self.compile_expr(expr);
-                                self.builder.build_return(Some(&value));
+                                if value.get_type().is_void_type() {
+                                    self.builder.build_return(None);
+                                } else {
+                                    match value {
+                                        AnyValueEnum::IntValue(i) => {
+                                            self.builder.build_return(Some(&i));
+                                        },
+                                        AnyValueEnum::PointerValue(p) => {
+                                            self.builder.build_return(Some(&p));
+                                        },
+                                        _ => panic!("Unknown return type: {:#?}", value),
+                                    }
+                                };
                             },
                             x => {
                                     if let Stmt::Expression(expr) = x {
                                     let value = self.compile_expr(expr);
                                     if is_last_expr {
-                                        _last_value = Some(value.as_basic_value_enum());
+                                        _last_value = Some(value.as_any_value_enum());
                                     }
                                 }
                             },
@@ -473,6 +436,37 @@ impl<'ctx> Compiler<'ctx> {
 
             }
         }
+    }
+
+    pub fn stdlib(&self, idents: &Vec<String>) -> anyhow::Result<BasicValueEnum<'ctx>> {
+                if let Some(second_ident) = idents.get(1) {
+                    match second_ident.as_str() {
+                        "printf" => {
+                            let printf_fn = self.module.get_function("printf").expect("printf function not found");
+                            let format_str = self.add_string_format_global();
+                            self.builder.build_call(
+                                printf_fn, 
+                                &[format_str.as_basic_value_enum().into()], 
+                                "printf_call");
+                            return Ok(self.context.i32_type().const_int(0, false).into());
+                        },
+                        "args" => {
+                            let argv_global = self.module.get_global("argv_global").expect("argv_global not found");
+
+                            let argv_type = self.context.i8_type().ptr_type(AddressSpace::default()).ptr_type(AddressSpace::default());
+                            let argv = self.builder.build_load(argv_type, argv_global.as_pointer_value(), "argv_val").into_pointer_value();
+
+                            // return argv
+                            return Ok(argv.into());
+                        }
+                        _ => panic!("Unknown std function: {}", second_ident),
+                    } 
+                }   else {
+                    // Handle error: no identifier
+                    panic!("No identifier found");
+                } 
+            
+         
     }
 
 }
