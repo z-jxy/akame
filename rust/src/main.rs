@@ -52,7 +52,7 @@ fn main() {
     }
     match cli.command {
         Some(Commands::Emit { file }) => {
-            println!("Emitting from file: {:?}", file);
+            println!("[*] Emitting IR for file: {}", file.display());
             let script = std::fs::read_to_string(file.as_path()).expect("Something went wrong reading the file");
             match akame_interpreter::parse(&script) {
                 Ok(ast) => {
@@ -60,7 +60,8 @@ fn main() {
                     llvm::emit(ast)
                 },
                 Err(err) => {
-                    println!("Error: {:?}", err);
+                    println!("{:?}", err);
+                    //std::process::exit(1);
                 }
             }
         },

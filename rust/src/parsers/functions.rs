@@ -10,13 +10,16 @@ use nom::combinator::opt;
 use nom::error::context;
 use nom::multi::{separated_list0, many0};
 use nom::sequence::delimited;
-use nom::IResult;
+
 
 
 use crate::llvm::ast::{Expr, Stmt};
 use crate::parsers::tokens::parse_identifier;
 
 
+use super::ParseResult;
+
+use super::error::CustomError;
 use super::expressions::expression;
 
 use super::statements::{parse_return_statement, parse_let_statement};
@@ -36,7 +39,7 @@ impl fmt::Display for Expr {
     }
 }
 /// parse the required function declaration ()
-fn parse_function(input: &str) -> IResult<&str, Stmt> {
+fn parse_function(input: &str) -> ParseResult<&str, Stmt> {
     
     let (input, _) = multispace0(input)?;
     let (input, ident) = parse_identifier(input)
@@ -55,9 +58,10 @@ fn parse_function(input: &str) -> IResult<&str, Stmt> {
 
     match ident {
         Expr::Ident(fn_name) => {
-            
+
             if fn_name == "main" && params.len() != 0 {
-                panic!("main function must have no parameters")
+                //eprintln!("main function must have no parameters");
+                return Err(nom::Err::Failure(CustomError::MainFunctionWithParams(input)));
             }
 
             let (input, _) = multispace0(input)?;
@@ -113,21 +117,21 @@ fn parse_function(input: &str) -> IResult<&str, Stmt> {
     //}
 }
 
-fn parse_function_declaration(input: &str) -> IResult<&str, Stmt> {
+fn parse_function_declaration(input: &str) -> ParseResult<&str, Stmt> {
     let (input, _) = ws(tag("fn"))(input)?;
     //let function = function(input).expect("Error parsing function declaration");
-    Ok(parse_function(input).expect("Error parsing function declaration"))
+    parse_function(input)
 }
 
 
-fn parse_expr_statement(input: &str) -> IResult<&str, Stmt> {
+fn parse_expr_statement(input: &str) -> ParseResult<&str, Stmt> {
     let (input, expr) = expression(input)?;
     Ok((input, Stmt::Expression(expr)))
 }
 
-pub fn ws<'a, T, F>(parser: F) -> impl Fn(&'a str) -> IResult<&'a str, T>
+pub fn ws<'a, T, F>(parser: F) -> impl Fn(&'a str) -> ParseResult<&'a str, T>
 where
-    F: Fn(&'a str) -> IResult<&'a str, T>,
+    F: Fn(&'a str) -> ParseResult<&'a str, T>,
 {
     move |input: &'a str| {
         let (input, _) = opt(multispace0)(input)?;
@@ -138,7 +142,7 @@ where
 }
 
 
-pub fn parse_statement(input: &str) -> IResult<&str, Stmt> {
+pub fn parse_statement(input: &str) -> ParseResult<&str, Stmt> {
     context(
         "statement",
         alt((
@@ -147,7 +151,6 @@ pub fn parse_statement(input: &str) -> IResult<&str, Stmt> {
             parse_let_statement,
             parse_expr_statement,
         )),
-    )(input).map(|(input, statement)| {
-        (input, statement)
-    })
+    )(input)
+    .map(|(input, statement)| (input, statement))
 }

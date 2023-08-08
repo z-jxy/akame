@@ -1,6 +1,6 @@
-use inkwell::AddressSpace;
+
 use inkwell::context::Context;
-use crate::llvm::ast::{Stmt, Expr};
+use crate::llvm::ast::Stmt;
 use crate::llvm::compiler::Compiler;
 
 #[no_mangle]
@@ -20,7 +20,7 @@ pub fn emit_from_statements(ast: Vec<Stmt>) {
     //compiler.module.print_to_file(std::path::Path::new("main.ll")).unwrap();
     println!("{}", compiler.module.print_to_string().to_string());
 }
-
+/*
 pub fn codegen() {
     let context = Context::create();
     let mut compiler = Compiler::new(&context);
@@ -68,3 +68,4 @@ pub fn codegen() {
     compiler.module.print_to_file(std::path::Path::new("main.ll")).unwrap();
     println!("{}", compiler.module.print_to_string().to_string());
 }
+ */

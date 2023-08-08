@@ -243,7 +243,7 @@ impl<'ctx> Compiler<'ctx> {
                     
 
 
-                    let mut last_value = None;
+                    let mut _last_value = None;
 
                     for (i, stmt) in body.iter().enumerate() {
                         let is_last_expr = i == body.len() - 1;
@@ -265,7 +265,7 @@ impl<'ctx> Compiler<'ctx> {
                                     if let Stmt::Expression(expr) = x {
                                     let value = self.compile_expr(expr);
                                     if is_last_expr {
-                                        last_value = Some(value.as_basic_value_enum());
+                                        _last_value = Some(value.as_basic_value_enum());
                                     }
                                 }
                             },

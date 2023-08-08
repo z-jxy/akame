@@ -4,11 +4,13 @@ use nom::character::complete::multispace0;
 use nom::error::context;
 
 use nom::sequence::delimited;
-use nom::IResult;
+
 
 
 use crate::llvm::ast::Expr;
 
+
+use super::ParseResult;
 
 use super::tokens::{
     parse_identifier, 
@@ -19,7 +21,7 @@ use super::tokens::{
     get_identifier,
 };
 
-pub fn parse_function_call(input: &str) -> IResult<&str, Expr> {
+pub fn parse_function_call(input: &str) -> ParseResult<&str, Expr> {
     let (input, name) = parse_identifier(input)?;
     let (input, args) = delimited(
         tag("("), 
@@ -30,7 +32,7 @@ pub fn parse_function_call(input: &str) -> IResult<&str, Expr> {
     Ok((input, Expr::Call(id, args)))
 }
 
-fn parse_primary_expr(input: &str) -> IResult<&str, Expr> {
+fn parse_primary_expr(input: &str) -> ParseResult<&str, Expr> {
     alt((
         parse_identifier,
         parse_number,
@@ -40,7 +42,7 @@ fn parse_primary_expr(input: &str) -> IResult<&str, Expr> {
     ))(input)
 }
 
-fn parse_infix_expr(input: &str) -> IResult<&str, Expr> {
+fn parse_infix_expr(input: &str) -> ParseResult<&str, Expr> {
     let (input, left) = parse_variable(input)?;
     let (input, _) = multispace0(input)?;
     let (input, op) = alt((
@@ -65,7 +67,7 @@ fn parse_infix_expr(input: &str) -> IResult<&str, Expr> {
 }
 
 
-pub fn expression(input: &str) -> IResult<&str, Expr> {
+pub fn expression(input: &str) -> ParseResult<&str, Expr> {
     context(
         "expr", 
         alt((
@@ -73,9 +75,8 @@ pub fn expression(input: &str) -> IResult<&str, Expr> {
             parse_infix_expr,
             parse_primary_expr,
         ))
-    )(input).map(|(input, expr)| {
-        //println!("expr: {:?}", expr);
-        //println!("input: {:?}", input);
+    )(input)
+        .map(|(input, expr)| 
         (input, expr)
-    })
+    )
 }

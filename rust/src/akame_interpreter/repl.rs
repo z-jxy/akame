@@ -3,6 +3,7 @@ use rustyline::Editor;
 
 use super::interpreter::Interpreter;
 
+#[allow(dead_code)]
 pub fn interactive() -> Result<(), Box<dyn std::error::Error>> {
     let mut rl = Editor::<()>::new();
     let mut interpreter = Interpreter::new();

@@ -15,7 +15,7 @@ impl Interpreter {
 
     pub fn eval_source(&mut self, script: &str) {
         match parse_program(&script) {
-            Ok((_, parsed_program)) => {
+            Ok(parsed_program) => {
                 parsed_program.iter().for_each(|stmt| {
                     match self.visit_stmt(stmt) {
                         // we don't print anything since
@@ -35,7 +35,7 @@ impl Interpreter {
     #[allow(dead_code)]
     pub fn eval_str(&mut self, input: &str) -> anyhow::Result<String> {
         match parse_program(&input) {
-            Ok((_, parsed_program)) => {
+            Ok(parsed_program) => {
                 let mut result = String::new();
                 for stmt in parsed_program {
                     match self.visit_stmt(&stmt) {
@@ -82,7 +82,6 @@ impl Interpreter {
                                 BinaryOp::Subtract=> Ok(Value::Number(left - right)),
                                 BinaryOp::Multiply => Ok(Value::Number(left * right)),
                                 BinaryOp::Divide => Ok(Value::Number(left / right)),
-                                _ => Err(anyhow::anyhow!("Unexpected operator: {}", op)),
                             };
                         },
                         (Value::Str(left), Value::Str(right)) => {
@@ -275,6 +274,7 @@ impl Interpreter {
 
 }
 
+/*
 fn handle_value(value: &Value) -> anyhow::Result<Value> {
     match value {
         Value::Str(s) => {
@@ -292,7 +292,7 @@ fn handle_value(value: &Value) -> anyhow::Result<Value> {
         x => Err(anyhow::anyhow!("Expected string argument to print. Got: {:?}", x))
     }
 }
-
+ */
 
 #[derive(Debug, Clone)]
 pub enum Value {
