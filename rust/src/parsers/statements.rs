@@ -27,19 +27,19 @@ where
 }
 
 pub fn parse_let_statement(input: &str) -> ParseResult<&str, Stmt> {
-    println!("let stmnt input: {:?}", input);
+    //println!("let stmnt input: {:?}", input);
     let (input, _) = space_opt(tag("let"))(input)?;
-    println!("its a let stmnt");
+    //println!("its a let stmnt");
     let (input, ident) = space_opt(parse_identifier)(input)?;
-    println!("let after ident: {}", input);
-    println!("let stmnt IDENT: {:?}", ident);
+    //println!("let after ident: {}", input);
+    //println!("let stmnt IDENT: {:?}", ident);
     let (input, _) = space_opt(tag("="))(input)?;
-    println!("let after EQUALS: {}", input);
+    //println!("let after EQUALS: {}", input);
     let (input, expr) = space_opt(alt((parse_function_call, parse_infix_expr, parse_primary_expr)))(input)?;
-    println!("let after expr: {}", input);
+    //println!("let after expr: {}", input);
     let (input, _) = space_opt(tag(";"))(input)?;
 
-    println!("stmnt PARSED: {}", input);
+    //println!("stmnt PARSED: {}", input);
 
     match ident {
         Expr::Ident(id) => Ok((input, Stmt::Assignment { ident: id, expr })),

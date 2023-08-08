@@ -33,6 +33,7 @@ impl<'ctx> Compiler<'ctx> {
     // implementations for some stdlib functions we're going to make available
     pub fn add_stdlib(&self) {
         self.add_printf();
+        self.add_print_string_fn();
         self.add_printd();
     }
 
@@ -55,6 +56,36 @@ impl<'ctx> Compiler<'ctx> {
             "argv_0");
     }
 
+    fn add_print_string_fn(&self) {
+        let i8_ptr_type = self.context.i8_type().ptr_type(AddressSpace::default());
+        let void_type = self.context.void_type();
+        
+        // Define function type for our wrapper
+        let fn_type = void_type.fn_type(&[i8_ptr_type.into()], false);
+    
+        // Add function to the module
+        let function = self.module.add_function("print", fn_type, None);
+    
+        // Create the entry block
+        let entry = self.context.append_basic_block(function, "entry");
+        self.builder.position_at_end(entry);
+    
+        // Load our format string
+        let format_str_s = self.builder.build_global_string_ptr("%s\n\00", "format_str_s_");
+    
+        // Get the first parameter (the string to print)
+        let arg = function.get_nth_param(0).unwrap().into_pointer_value();
+    
+        // Call printf with our format string and the argument
+        let printf_fn = self.module.get_function("printf").expect("printf function not found");
+        self.builder.build_call(
+            printf_fn, 
+            &[format_str_s.as_basic_value_enum().into(), 
+            arg.into()], "printf_call");
+    
+        // Return
+        self.builder.build_return(Some(&self.context.i32_type().const_int(0, false)));
+    }
 
 
     fn add_printf(&self) {
@@ -63,6 +94,7 @@ impl<'ctx> Compiler<'ctx> {
             &[self.context.i8_type().ptr_type(AddressSpace::default()).into()],
             true
         );
+        
         self.module.add_function("printf", printf_type, None);
     }
 
@@ -76,7 +108,8 @@ impl<'ctx> Compiler<'ctx> {
             self.builder.position_at_end(basic_block);
         let param = printd_fn.get_nth_param(0).unwrap().into_int_value();
         
-        let format_str = self.builder.build_global_string_ptr("%d\n\00", "format_str");
+        let format_str = self.builder.build_global_string_ptr("%d\n\00", "format_str_d");
+        self.builder.build_global_string_ptr("%s\n\00", "format_str_s");
             self.builder
                 .build_call(
                     self.module.get_function("printf").unwrap(),
@@ -95,8 +128,31 @@ impl<'ctx> Compiler<'ctx> {
         let fn_type = i32_type.fn_type(&[i32_type.into(), i8_ptr_type.ptr_type(AddressSpace::default()).into()], false);
         
         let main_fn = self.module.add_function(GLOBAL_ENTRY, fn_type, None);
+
+
         let entry = self.context.append_basic_block(main_fn, "entry");
         self.builder.position_at_end(entry);
+
+            // Store argc and argv as global variables
+        let argc_global = self.module.add_global(i32_type, Some(AddressSpace::default()),   "argc_global");
+        let argv_global = self.module.add_global(i8_ptr_type.ptr_type(AddressSpace::default()),     Some(AddressSpace::default()), "argv_global");
+
+        argc_global.set_initializer(&i32_type.const_zero()); // initialize with 0
+        argv_global.set_initializer(&i8_ptr_type.const_null()); // initialize with null
+
+        let argc = main_fn.get_nth_param(0).unwrap();
+        let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
+        
+        // Sample usage: Retrieve argv[0] and print it
+        // let argv_0_ptr = unsafe {
+        //     self.builder.build_gep(
+        //         i8_ptr_type,
+        //         argv, 
+        //         &[i32_type.const_int(0, false)], 
+        //         "argv_0_ptr")
+        // };
+        self.builder.build_store(argc_global.as_pointer_value(), argc);
+        self.builder.build_store(argv_global.as_pointer_value(), argv);
     
         // Retrieve argv[0]
         /*
@@ -127,7 +183,27 @@ impl<'ctx> Compiler<'ctx> {
         let user_defined_main = self.module.get_function("main")
         .expect("main function not found");
 
+        let real_entry = self.module.get_function(GLOBAL_ENTRY).expect("_entry function not found");
+        // add a new basic block to the entry function
+
+        let blocks = real_entry.get_basic_blocks();
+
+        if let Some(block) = blocks.first()  {
+            self.builder.position_at_end(*block);
+            // Call user-defined main with no args
+            self.builder.build_call(
+                user_defined_main, 
+                &[], 
+                "user_main_call");
+            // Return 0 from main
+            println!("[*] linked user-defined main to _entry");
+            self.builder.build_return(Some(&self.context.i32_type().const_int(0, false)));
+        }
+        /*
+        let entry = self.context.append_basic_block(real_entry, "entry");
+        self.builder.position_at_end(entry);
         // Call user-defined main with no args
+
         self.builder.build_call(
             user_defined_main, 
             &[], 
@@ -135,6 +211,7 @@ impl<'ctx> Compiler<'ctx> {
 
         // Return 0 from main
         self.builder.build_return(Some(&self.context.i32_type().const_int(0, false)));
+         */
     }
 
     fn compile_expr(&self, expr: &Expr) -> inkwell::values::BasicValueEnum<'ctx> {
@@ -206,11 +283,13 @@ impl<'ctx> Compiler<'ctx> {
                                     return self.context.i32_type().const_int(0, false).into();
                                 },
                                 "args" => {
-                                        // Get argv (pointer to arguments array)
-                                        let main_fn = self.module.get_function(GLOBAL_ENTRY).unwrap();
-                                        let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
-                                        // Return the argv pointer directly
-                                        argv.into()
+                                    let argv_global = self.module.get_global("argv_global").expect("argv_global not found");
+
+                                    let argv_type = self.context.i8_type().ptr_type(AddressSpace::default()).ptr_type(AddressSpace::default());
+                                    let argv = self.builder.build_load(argv_type, argv_global.as_pointer_value(), "argv_val").into_pointer_value();
+
+                                    // return argv
+                                    return argv.into();
                                 }
                                 _ => panic!("Unknown std function: {}", second_ident),
                             } 
@@ -240,7 +319,10 @@ impl<'ctx> Compiler<'ctx> {
                     .build_call(function, args.as_slice(), "calltmp");
                 match result.try_as_basic_value().left() {
                     Some(value) => value.into(),
-                    None => panic!("Expected integer value from function call."),
+                    None => {
+                        //panic!("Expected integer value from function call.: {:#?}", result);
+                        self.context.i32_type().const_int(0, false).into()
+                    },
                 }
             }
             Expr::Ident(var_name) => match self.variables.get(var_name) {

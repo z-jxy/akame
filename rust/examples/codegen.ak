@@ -5,7 +5,7 @@ fn hello(num) {
 fn main() {
     let ee = "hello";
     let value = std::args[1];
-    printf(value);
+    print(value);
     let number = hello(3);
     printd(number);
 }

@@ -16,6 +16,5 @@ pub fn parse_array(input: &str) -> ParseResult<&str, Expr> {
 pub fn parse_array_indexing(input: &str) -> ParseResult<&str, Expr> {
     let (input, array) = alt((parse_qualified_identifier, parse_identifier))(input)?;
     let (input, index) = delimited(tag("["), expression, tag("]"))(input)?;
-    println!("input: {}", input);
     Ok((input, Expr::ArrayIndexing(Box::new(array), Box::new(index))))
 }
