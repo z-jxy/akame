@@ -14,7 +14,7 @@ use nom::IResult;
 
 
 use crate::llvm::ast::{Expr, Stmt};
-use crate::parsers::tokens::{parse_identifier, get_identifier};
+use crate::parsers::tokens::parse_identifier;
 
 
 use super::expressions::expression;
@@ -35,11 +35,12 @@ impl fmt::Display for Expr {
         }
     }
 }
-
-fn function(input: &str) -> IResult<&str, Stmt> {
+/// parse the required function declaration ()
+fn parse_function(input: &str) -> IResult<&str, Stmt> {
     //let (input, _) = ws(tag("fn"))(input)?;
     let (input, _) = multispace0(input)?;
-    let (input, ident) = parse_identifier(input)?;
+    let (input, ident) = parse_identifier(input)
+        .expect("Missing identifier in function declaration");
     let (input, _) = multispace0(input)?;
     let (input, params) = delimited(
         tag("("), 
@@ -75,7 +76,7 @@ fn function(input: &str) -> IResult<&str, Stmt> {
 fn parse_function_declaration(input: &str) -> IResult<&str, Stmt> {
     let (input, _) = ws(tag("fn"))(input)?;
     //let function = function(input).expect("Error parsing function declaration");
-    Ok(function(input).expect("Error parsing function declaration"))
+    Ok(parse_function(input).expect("Error parsing function declaration"))
 }
 
 

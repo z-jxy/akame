@@ -14,8 +14,9 @@ pub fn emit_from_statements(ast: Vec<Stmt>) {
     let mut compiler = Compiler::new(&context);
 
     compiler.add_stdlib();
-
+    
     compiler.compile(&ast);
+    compiler.emit_main_function();
     //compiler.module.print_to_file(std::path::Path::new("main.ll")).unwrap();
     println!("{}", compiler.module.print_to_string().to_string());
 }

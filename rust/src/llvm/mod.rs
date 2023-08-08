@@ -50,8 +50,12 @@ pub fn compile_ast(ast: Vec<ast::Stmt>) {
 
 
 	Command::new("clang")
+		// set the entry point to our _entry function which wraps the users main function
+		.arg("-Wl,-e,__entry")
+		// set the output file to build/main 
 		.arg("-o")
 		.arg(&format!("{}/main", build_out))
+		// set the input file to build/main.ll
 		.arg(ir_out)
 		.output()
 		.expect("failed to execute process");

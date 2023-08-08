@@ -4,5 +4,5 @@ fn hello(num) {
 
 fn main(argc, argv) {
     let number = hello(3);
-    printd(number);
+    printf(argc);
 }

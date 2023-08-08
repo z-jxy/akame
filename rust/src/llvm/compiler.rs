@@ -1,4 +1,4 @@
-use inkwell::{execution_engine::ExecutionEngine, context::Context, AddressSpace, values::BasicValue, OptimizationLevel};
+use inkwell::{execution_engine::ExecutionEngine, context::Context, AddressSpace, values::{BasicValue, BasicValueEnum}, OptimizationLevel};
 
 use super::ast::{Stmt, Expr, VariableValue, BinaryOp};
 
@@ -54,6 +54,67 @@ impl<'ctx> Compiler<'ctx> {
         self.builder.build_return(Some(&param));
     }
 
+    pub fn add_string_format_global(&self) -> inkwell::values::GlobalValue<'ctx> {
+        let str_format = self.builder.build_global_string_ptr("%s\n", "str_format");
+        str_format
+    }
+
+    pub fn emit_main_function(&self) {
+        let i8_ptr_type = self.context.i8_type().ptr_type(AddressSpace::default());
+        let i32_type = self.context.i32_type();
+        let fn_type = i32_type.fn_type(&[i32_type.into(), i8_ptr_type.ptr_type(AddressSpace::default()).into()], false);
+        
+        let main_fn = self.module.add_function("_entry", fn_type, None);
+        let entry = self.context.append_basic_block(main_fn, "entry");
+        self.builder.position_at_end(entry);
+    
+        // Retrieve argv[0]
+        let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
+        let argv_1_ptr = unsafe {
+            self.builder.build_gep(
+                argv.get_type().get_context().i8_type().ptr_type(AddressSpace::default()),
+                argv, 
+                &[i32_type.const_int(1, false)], 
+                "argv_0_ptr")
+        };
+        let argv_0 = self.builder.build_load(
+            self.context.i8_type().ptr_type(AddressSpace::default()),
+            argv_1_ptr, 
+            "argv_0");
+    
+        // Call printf
+        let printf_fn = self.module.get_function("printf").expect("printf function not found");
+        let format_str = self.add_string_format_global();
+        self.builder.build_call(
+            printf_fn, 
+            &[format_str.as_basic_value_enum().into(), argv_0.into()], 
+            "printf_call");
+
+        let user_defined_main = self.module.get_function("main")
+            .expect("main function not found");
+
+        // Call user-defined main with no args
+        self.builder.build_call(
+            user_defined_main, 
+            &[], 
+            "user_main_call");
+
+
+        // Create a new stack frame for the function
+
+        // Create a new basic block for the function
+
+
+        // Call the user-defined main function
+
+        // Return the value from the user-defined main function
+
+
+    
+        // Return 0 from main
+        self.builder.build_return(Some(&i32_type.const_int(0, false)));
+    }
+
     fn compile_expr(&self, expr: &Expr) -> inkwell::values::BasicValueEnum<'ctx> {
         match expr {
             //Expr::Str(s) => {
@@ -104,10 +165,30 @@ impl<'ctx> Compiler<'ctx> {
                 }
             }
             Expr::Ident(var_name) => match self.variables.get(var_name) {
-                Some(VariableValue::Int(value)) => inkwell::values::BasicValueEnum::IntValue(*value),
+                Some(VariableValue::Int(value)) => BasicValueEnum::IntValue(*value),
                 Some(VariableValue::Str(referenced_var)) => {
                     match self.variables.get(referenced_var) {
-                        Some(VariableValue::Int(referenced_value)) => inkwell::values::BasicValueEnum::IntValue(*referenced_value),
+                        Some(VariableValue::Int(referenced_value)) => BasicValueEnum::IntValue(*referenced_value),
+                        Some(VariableValue::Str(s)) => {
+                            let gep_indices = [
+                                self.context.i32_type().const_zero(), // For the first dimension (since it's a global array)
+                                self.context.i32_type().const_zero()  // For the first character of the string
+                            ];
+                            
+                            // Return a pointer to the start of the string
+
+                            unsafe {
+                                inkwell::values::BasicValueEnum::PointerValue(
+                                    self.builder
+                                    .build_gep(
+                                        self.context.i8_type().array_type((s.len() + 1) as u32),
+                                        self.module.get_global(&format!("str_{}", s)).unwrap().as_pointer_value(),
+                                        &gep_indices, 
+                                        "str_ptr")
+                                )   
+                            }
+
+                        }
                         _ => panic!("Dereferencing non-int variable or undefined variable"),
                     }
                 }
@@ -116,7 +197,10 @@ impl<'ctx> Compiler<'ctx> {
                     panic!("Variable not found in symbol table");
                 }
             },
-            Expr::Char(_) => todo!(),
+            Expr::Char(c) => {
+                let char_val = self.context.i8_type().const_int(*c as u64, false);
+                char_val.into()
+            },
             Expr::Infix(left, op, right) => {
                 let left_value = self.compile_expr(left).into_int_value();
                 let right_value = self.compile_expr(right).into_int_value();

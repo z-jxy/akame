@@ -1,6 +1,6 @@
 use nom::{IResult, multi::separated_list0, bytes::complete::tag, branch::alt, character::complete::multispace1, error::context};
 
-use crate::{ llvm::ast::Stmt};
+use crate::llvm::ast::Stmt;
 
 use self::functions::parse_statement;
 
