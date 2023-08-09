@@ -24,7 +24,7 @@ use super::expressions::expression;
 
 use super::statements::space_opt;
 
-
+pub const USER_DEFINED_ENTRY : &str = "_main";
 
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -87,8 +87,18 @@ fn parse_function(input: &str) -> ParseResult<&str, Stmt> {
     if ident == "main" && !params.is_empty() {
         return Err(nom::Err::Failure(CustomError::MainFunctionWithParams(input)));
     }
+    
     let (input, body) = parse_function_body(input)?;
-    Ok((input, Stmt::FunctionDeclaration{ ident, params, body }))
+
+    Ok((
+        input, 
+        Stmt::FunctionDeclaration{ 
+            ident: match ident == "main" {
+                true => USER_DEFINED_ENTRY.to_string(),
+                false => ident,
+            }, params, body 
+        }
+    ))
 }
 
 pub fn parse_function_declaration(input: &str) -> ParseResult<&str, Stmt> {

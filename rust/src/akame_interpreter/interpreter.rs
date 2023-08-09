@@ -213,26 +213,6 @@ impl Interpreter {
             | Stmt::Return(expr) => {
                 Ok(self.visit_expr(&expr)?)
             },
-            /*
-            Statement::Print(expr) => {
-                // check if the variable already exists in the symbol table
-                if let Expression::Identifier(ident) = expr {
-                    let value = self.symbol_table.get(ident);
-                    match value {
-                        Some(value) => {
-                            return handle_value(&value);
-                        },
-                        None => {
-                            println!("Symbol table: {:?}", self.symbol_table);
-                            return Err(anyhow::anyhow!("Undefined variable: {}", ident))
-                        },
-                    }
-                }
-                // if not in the table, we need to visit the expression
-                return handle_value(&self.visit_expr(&expr)?)
-            },
-             */
-
             Stmt::FunctionDeclaration{ ident, params, body } => {
                 let value: Value = Value::Function(params.to_owned(), body.to_owned());
                 self.symbol_table.insert(ident.to_owned(), value.to_owned());
@@ -240,81 +220,8 @@ impl Interpreter {
             },
         }
     }
-
-    
-
-    //fn call_function(&mut self, name: &str, args: Vec<Expression>) -> Result<Value, anyhow::Error> {
-    //    match name {
-    //        "print" => {
-    //            if let Some(arg) = args.get(0) {
-    //                let value = self.visit_expr(arg)?;
-    //                match value {
-    //                    Value::Str(s) => {
-    //                        println!("{}", s);
-    //                        Ok(Value::None)  // Assuming Value::None is your "void" type
-    //                    },
-    //                    _ => Err(anyhow::anyhow!("Expected string argument to print"))
-    //                }
-    //            } else {
-    //                Err(anyhow::anyhow!("print function expects at least one argument"))
-    //            }
-    //        }
-    //        _fn => {
-    //            if let Some(
-    //                Value::Function(params, body)
-    //            ) = self.symbol_table.get(name) {
-    //                if params.len() != args.len() {
-    //                    return Err(anyhow::anyhow!("Expected {} arguments but received {}", params.len(), //args.len()));
-    //                }
-    //
-    //                // Create a new scope
-    //                let old_env = self.symbol_table.clone();
-    //                let ret = {
-    //                    // Bind arguments to parameters
-    //                    for (param, arg) in params.iter().zip(args.iter()) {
-    //                        let arg_value = self.visit_expr(arg)?;
-    //                        self.symbol_table.insert(param.to_owned(), arg_value);
-    //                    }
-    //                
-    //                    // Execute the body
-    //                    let mut last_value = Value::Str("".into()); // Default value
-    //                    for stmt in body {
-    //                        last_value = Value::Str(self.visit_stmt(stmt)?.into());
-    //                    }
-    //                    last_value
-    //                };
-    //                // Restore the old scope
-    //                self.symbol_table = old_env;
-    //                
-    //                Ok(ret)
-    //            } else {
-    //                Err(anyhow::anyhow!("Undefined function: {}", name))
-    //            }
-    //        }
-    //    }
-    //}
-
 }
 
-/*
-fn handle_value(value: &Value) -> anyhow::Result<Value> {
-    match value {
-        Value::Str(s) => {
-            println!("{:?}", s);
-            Ok(Value::None)
-        },
-        Value::Number(n) => {  // Handle numbers
-            println!("{}", n);
-            Ok(Value::None)
-        },
-        Value::Return(v) => {
-            println!("{}", v);
-            Ok(Value::None)
-        },
-        x => Err(anyhow::anyhow!("Expected string argument to print. Got: {:?}", x))
-    }
-}
- */
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -362,15 +269,3 @@ impl std::fmt::Display for Value {
     }
 }
 
-//impl Value {
-//    pub fn type_name(&self) -> &str {
-//        match self {
-//            Value::Number(_) => "number",
-//            Value::Str(_) => "string",
-//            Value::Char(_) => "char",
-//            Value::Function(..) => "function",
-//            Value::None => "none",
-//            Value::Return(_) => "return",
-//        }
-//    }
-//}

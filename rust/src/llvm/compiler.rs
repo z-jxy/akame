@@ -11,7 +11,8 @@ pub struct Compiler<'ctx> {
     variables: std::collections::HashMap<String, VariableValue<'ctx>>,
 }   
 
-const GLOBAL_ENTRY : &str = "_entry";
+pub const GLOBAL_ENTRY : &str = "main";
+pub const USER_DEFINED_ENTRY : &str = "_main";
 
 impl<'ctx> Compiler<'ctx> {
     pub fn new(ctx: &'ctx Context) -> Compiler<'ctx> {
@@ -149,8 +150,13 @@ impl<'ctx> Compiler<'ctx> {
     }
 
     pub fn link_user_main_to_entry(&self) {
-        let user_defined_main = self.module.get_function("main")
+        let user_defined_main = self.module.get_function(USER_DEFINED_ENTRY)
         .expect("main function not found");
+
+        // change the user functions name
+
+        // create a wrapper around user-defined main 
+        
 
         let real_entry = self.module.get_function(GLOBAL_ENTRY).expect("_entry function not found");
         // add a new basic block to the entry function
@@ -238,7 +244,7 @@ impl<'ctx> Compiler<'ctx> {
                 // Assuming idents is a Vec<String> or similar
                 if let Some(first_ident) = idents.first() {
                     match first_ident.as_str() {
-                        "std" => self.stdlib(idents).expect("Unable to link to stdlib").into(),
+                        "std" => self.stdlib_call(idents).expect("Unable to link to stdlib").into(),
                         _ => panic!("Unknown qualified identifier: {}", first_ident),
                     }
                 } else {
@@ -438,7 +444,7 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
-    pub fn stdlib(&self, idents: &Vec<String>) -> anyhow::Result<BasicValueEnum<'ctx>> {
+    pub fn stdlib_call(&self, idents: &Vec<String>) -> anyhow::Result<BasicValueEnum<'ctx>> {
                 if let Some(second_ident) = idents.get(1) {
                     match second_ident.as_str() {
                         "printf" => {
