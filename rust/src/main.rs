@@ -1,12 +1,14 @@
 mod akame_interpreter;
-mod ast;
 mod llvm;
 mod parsers;
+mod utils;
 pub mod types;
 
-use std::{path::{PathBuf, Path}, env};
+use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+
+use crate::utils::find_it;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -38,6 +40,9 @@ enum Commands {
         /// Source to compile
         //#[arg(short, long, value_name = "FILE")]
         file: PathBuf,
+
+        #[arg(short, long, value_name = "bin/main")]
+        out_dir: Option<PathBuf>,
     },
     Parse {
         /// Source to parse
@@ -51,24 +56,8 @@ enum Commands {
     }
 }
 
-fn find_it<P>(exe_name: P) -> Option<PathBuf>
-    where P: AsRef<Path>,
-{
-    env::var_os("PATH").and_then(|paths| {
-        env::split_paths(&paths).filter_map(|dir| {
-            let full_path = dir.join(&exe_name);
-            if full_path.is_file() {
-                Some(full_path)
-            } else {
-                None
-            }
-        }).next()
-    })
-}
-
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-
     match args.command {
         Some(Commands::Emit { file }) => {
             println!("[*] Emitting IR for file: {}", file.display());
@@ -99,12 +88,12 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         },
-        Some(Commands::Compile { file }) => {
+        Some(Commands::Compile { file, out_dir }) => {
             println!("[*] Compiling: {:?}", file);
             let script = std::fs::read_to_string(file.as_path()).expect("Something went wrong reading the file");
             match akame_interpreter::parse(&script) {
                 Ok(ast) => {
-                    llvm::compile_ast(ast)?;
+                    llvm::compile_ast(ast, out_dir)?;
                 },
                 Err(err) => {
                     println!("Error: {:?}", err);
@@ -113,7 +102,6 @@ fn main() -> anyhow::Result<()> {
         },
         Some(Commands::Test { file }) => {
             println!("[*] Testing: {:?}", file);
-            //let script = std::fs::read_to_string(file.as_path()).expect("Something went wrong reading the file");
             let res = find_it("clang");
             println!("clang: {:?}", res);
         },

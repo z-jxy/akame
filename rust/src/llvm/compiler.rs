@@ -36,8 +36,21 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
+    /// Compile the AST to LLVM IR
+    pub fn compile_ir(&mut self, ast: Vec<Stmt>) -> anyhow::Result<()> {
+        // add the standard library to the compiler
+        self.add_stdlib();
+        // create the real entry point for the program
+        self.init_program_main(); 
+        // compile the user's ast
+        self.compile(&ast)?;
+        // wrap the user's main function the real entry point created in `emit_main_function`
+        self.link_user_main_to_entry()?; 
+        Ok(())
+    }
+
     // implementations for some stdlib functions we're going to make available
-    pub fn add_stdlib(&self) {
+    fn add_stdlib(&self) {
         self.add_printf();
         self.add_print_string_fn();
         self.add_printd();
@@ -74,7 +87,6 @@ impl<'ctx> Compiler<'ctx> {
         self.builder.build_return(None);
     }
 
-
     fn add_printf(&self) {
         // printf
         let printf_type = self.context.i8_type().fn_type(
@@ -104,12 +116,12 @@ impl<'ctx> Compiler<'ctx> {
         self.builder.build_return(Some(&param));
     }
 
-    pub fn add_string_format_global(&self) -> inkwell::values::GlobalValue<'ctx> {
+    fn add_string_format_global(&self) -> inkwell::values::GlobalValue<'ctx> {
         let str_format = self.builder.build_global_string_ptr("%s\n", "str_format");
         str_format
     }
 
-    pub fn emit_main_function(&self) {
+    fn init_program_main(&self) {
         let i8_ptr_type = self.context.i8_type().ptr_type(AddressSpace::default());
         let i32_type = self.context.i32_type();
         let fn_type = i32_type.fn_type(&[i32_type.into(), i8_ptr_type.ptr_type(AddressSpace::default()).into()], false);
@@ -142,7 +154,7 @@ impl<'ctx> Compiler<'ctx> {
         /* the return value is set is `link_user_main_to_entry` */
     }
 
-    pub fn link_user_main_to_entry(&self) {
+    fn link_user_main_to_entry(&self) -> anyhow::Result<()> {
         let user_defined_main = self.module.get_function(USER_DEFINED_ENTRY)
         .expect("main function not found");
 
@@ -152,16 +164,23 @@ impl<'ctx> Compiler<'ctx> {
 
         // add a new basic block to the entry function
         let blocks = real_entry.get_basic_blocks();
-        if let Some(block) = blocks.first()  {
-            self.builder.position_at_end(*block);
-            // Call user-defined main with no args
-            self.builder.build_call(
-                user_defined_main, 
-                &[], 
-                "user_main_call");
-            // Return 0 from main
-            println!("[*] linked user-defined main to _entry");
-            self.builder.build_return(Some(&self.context.i32_type().const_int(0, false)));
+
+        match blocks.first() {
+            Some(block) => {
+                self.builder.position_at_end(*block);
+                // Call user-defined main with no args
+                self.builder.build_call(
+                    user_defined_main, 
+                    &[], 
+                    "user_main_call");
+                // Return 0 from main
+                println!("[*] Linked user-defined main to _entry");
+                self.builder.build_return(Some(&self.context.i32_type().const_int(0, false)));
+                Ok(())
+            },
+            None => {
+                Err(anyhow!("Couldn't link to user main. No basic blocks found in entry function"))
+            }
         }
     }
 

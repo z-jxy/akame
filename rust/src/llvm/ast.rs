@@ -1,3 +1,5 @@
+pub type Ast = Vec<Stmt>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Num(i32),
@@ -27,6 +29,8 @@ pub enum Stmt {
     Expression(Expr),
     Return(Expr),
 }
+
+
 
 #[derive(Debug, Clone)]
 pub enum VariableValue<'ctx> {

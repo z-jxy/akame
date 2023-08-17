@@ -1,6 +1,6 @@
 ; ModuleID = 'main'
 source_filename = "main"
-target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
+target datalayout = "e-m:o-i64:64-i128:128-n32:64-S128"
 
 @format_str_s_ = private unnamed_addr constant [4 x i8] c"%s\0A\00", align 1
 @format_str_d = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1

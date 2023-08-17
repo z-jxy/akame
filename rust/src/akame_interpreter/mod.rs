@@ -1,4 +1,4 @@
-use crate::{ parsers::parse_program, llvm::ast::Stmt};
+use crate::{ parsers::parse_program, llvm::ast::Ast};
 
 pub mod interpreter;
 pub mod repl;
@@ -9,6 +9,6 @@ pub fn run_script(script: &str) {
     interpreter.eval_source(script);
 }
 
-pub fn parse(script: &str) -> anyhow::Result<Vec<Stmt>> {
+pub fn parse(script: &str) -> anyhow::Result<Ast> {
     Ok(parse_program(&script)?)
 }
