@@ -4,7 +4,7 @@ mod llvm;
 mod parsers;
 pub mod types;
 
-use std::path::PathBuf;
+use std::{path::{PathBuf, Path}, env};
 
 use clap::{Parser, Subcommand};
 
@@ -43,9 +43,28 @@ enum Commands {
         /// Source to parse
         //#[arg(short, long, value_name = "FILE")]
         file: PathBuf,
+    },
+    Test {
+        /// Source to parse
+        //#[arg(short, long, value_name = "FILE")]
+        file: PathBuf,
     }
 }
 
+fn find_it<P>(exe_name: P) -> Option<PathBuf>
+    where P: AsRef<Path>,
+{
+    env::var_os("PATH").and_then(|paths| {
+        env::split_paths(&paths).filter_map(|dir| {
+            let full_path = dir.join(&exe_name);
+            if full_path.is_file() {
+                Some(full_path)
+            } else {
+                None
+            }
+        }).next()
+    })
+}
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -91,6 +110,12 @@ fn main() -> anyhow::Result<()> {
                     println!("Error: {:?}", err);
                 }
             }
+        },
+        Some(Commands::Test { file }) => {
+            println!("[*] Testing: {:?}", file);
+            //let script = std::fs::read_to_string(file.as_path()).expect("Something went wrong reading the file");
+            let res = find_it("clang");
+            println!("clang: {:?}", res);
         },
         None => {
             println!("No subcommand was used");

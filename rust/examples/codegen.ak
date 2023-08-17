@@ -3,9 +3,7 @@ fn hello(num) {
 }
 
 fn main() {
-    let ee = "hello";
-    let value = std::args[1];
-    print(value);
-    let number = hello(3);
-    printd(number);
+    let arg = std::args[1];
+    print(arg);
+    printd(hello(4));
 }

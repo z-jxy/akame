@@ -88,7 +88,7 @@ impl Interpreter {
                     _ => Err(anyhow::anyhow!("Invalid array indexing: {}[{}]", array, index)),
                 }
             },
-            Expr::QualifiedIdent(idents) => todo!(),
+            Expr::QualifiedIdent(_) => todo!(),
          
             Expr::Infix(left, op, right) => {
                 let left_value;
