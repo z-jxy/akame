@@ -1,0 +1,51 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "akame",
+	"patterns": [
+		{
+			"include": "#keywords"
+		},
+		{
+			"include": "#strings"
+		},
+		{
+			"include": "#constant"
+		},
+		{
+			"match": "\\b(fn)\\b",
+			"name": "keyword.control.fn.akame"
+		},
+		{
+			"match": "\\b(let)\\b",
+			"name": "keyword.control.let.akame"
+		},
+		{
+            "name": "constant.numeric.akame",
+            "match": "\\b\\d+\\b"
+        },
+		{
+            "name": "constant.assignment_operator.akame",
+            "match": "\\b=\\b"
+        }
+	],
+	"repository": {
+		"keywords": {
+			"patterns": [{
+				"name": "keyword.control.akame",
+				"match": "\\b(if|while|for|return)\\b"
+			}]
+		},
+		"strings": {
+			"name": "string.quoted.double.akame",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"name": "constant.character.escape.akame",
+					"match": "\\\\."
+				}
+			]
+		}
+	},
+	"scopeName": "source.akame"
+}

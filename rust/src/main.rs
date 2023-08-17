@@ -10,7 +10,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
-struct Cli {
+struct Args {
     /// Mode
     mode: Option<String>,
 
@@ -21,8 +21,6 @@ struct Cli {
     /// Turn debugging information on
     #[arg(short, long, action = clap::ArgAction::Count)]
     debug: u8,
-
-    
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -50,25 +48,23 @@ enum Commands {
 
 
 fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+    let args = Args::parse();
 
-    if let Some(file) = cli.file {
-        println!("Value for file: {:?}", file);
-    }
-    match cli.command {
+    match args.command {
         Some(Commands::Emit { file }) => {
             println!("[*] Emitting IR for file: {}", file.display());
-            let script = std::fs::read_to_string(file.as_path()).expect("Something went wrong reading the file");
+            let script = std::fs::read_to_string(file.as_path())
+                .expect("Something went wrong reading the input file");
             match akame_interpreter::parse(&script) {
                 Ok(ast) => {
-                    if cli.debug > 0 {
+                    if args.debug > 0 {
                         println!("AST: {:?}", ast);
                     }
-                    llvm::emit(ast)
+                    llvm::emit(ast)?
                 },
                 Err(err) => {
                     println!("{:?}", err);
-                    //std::process::exit(1);
+                    std::process::exit(1);
                 }
             }
         },
@@ -100,35 +96,5 @@ fn main() -> anyhow::Result<()> {
             println!("No subcommand was used");
         }
     }
-
-    /*
-
-    match args[1].as_str() {
-        "llvm" => llvm::llvm_codegen(),
-        //"debug" => llvm::llvm_debug(),
-        _ => {
-            let filename = &args[1];
-            let script = std::fs::read_to_string(filename).expect("Something went wrong reading the file");
-            akame_interpreter::run_script(&script);
-        }
-    }
- */
-    //let args: Vec<String> = std::env::args().collect();
-    //match args.len() {
-    //    1 => {
-    //        if let Err(err) = akame_interpreter::repl::interactive() {
-    //            eprintln!("Error in main: {:?}", err);
-    //        }
-    //    },
-    //    2 => {
-    //        let filename = &args[1];
-    //        let script = std::fs::read_to_string(filename).expect("Something went wrong reading the file");
-    //        akame_interpreter::run_script(&script);
-    //    },
-    //    _ => {
-    //        println!("Usage: {} <filename>.ak", args[0]);
-    //        return;
-    //    }
-    //}
     Ok(())
 }

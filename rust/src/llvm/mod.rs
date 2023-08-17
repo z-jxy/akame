@@ -7,18 +7,13 @@ use self::compiler::Compiler;
 pub mod codegen;
 mod compiler;
 pub mod ast;
-/*
-pub fn llvm_codegen() {
-	codegen::codegen();
-}
- */
 
-//pub fn llvm_debug() {
-//	codegen::debug();
-//}
+/* we're creating a wrapper around the user's main function so we can initalize the runtime */
+pub const GLOBAL_ENTRY : &str = "main";
+pub const USER_DEFINED_ENTRY : &str = "_main";
 
-pub fn emit(stmts: Vec<ast::Stmt>) {
-	codegen::emit_from_statements(stmts);
+pub fn emit(stmts: Vec<ast::Stmt>) -> anyhow::Result<()> {
+	codegen::emit_from_statements(stmts)
 }
 
 pub fn compile_ast(ast: Vec<ast::Stmt>)-> anyhow::Result<()> {
@@ -27,12 +22,12 @@ pub fn compile_ast(ast: Vec<ast::Stmt>)-> anyhow::Result<()> {
 	
 	// add the standard library to the compiler
 	compiler.add_stdlib();
-
-	// compile the ast
-    compiler.compile(&ast);
-	// wrap the users main function in a function called __entry, this is the entry point for the program
-	compiler.emit_main_function();
-
+	// create the real entry point for the program
+	compiler.emit_main_function(); 
+	// compile the user's ast
+    compiler.compile(&ast)?;
+	// wrap the user's main function the real entry point created in `emit_main_function`
+	compiler.link_user_main_to_entry(); 
 
 	println!("[*] Emitted to LLVM IR 1/2");
 
@@ -58,13 +53,8 @@ pub fn compile_ast(ast: Vec<ast::Stmt>)-> anyhow::Result<()> {
 
 
 	let output = Command::new("clang")
-		// set the entry point to our _entry function which wraps the users main function
-		.arg("-Wl,-e,__entry")
-		// set the output file to build/main 
-		.arg("-o")
-		.arg(&format!("{}/main", build_out))
-		// set the input file to build/main.ll
-		.arg(ir_out)
+		.arg("-o").arg(&format!("{}/main", build_out)) // set the output file
+		.arg(ir_out) // set the input file
 		.output()
 		.expect("failed to execute process");
 

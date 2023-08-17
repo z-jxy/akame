@@ -4,3 +4,4 @@ bazel-*/*
 /bazel-*
 /rust/target
 /rust/akame-build
+.DS_Store

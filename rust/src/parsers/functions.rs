@@ -13,6 +13,7 @@ use nom::sequence::delimited;
 
 
 
+use crate::llvm::USER_DEFINED_ENTRY;
 use crate::llvm::ast::{Expr, Stmt};
 use crate::parsers::tokens::parse_identifier;
 
@@ -23,8 +24,6 @@ use super::error::CustomError;
 use super::expressions::expression;
 
 use super::statements::space_opt;
-
-pub const USER_DEFINED_ENTRY : &str = "_main";
 
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

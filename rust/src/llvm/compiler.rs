@@ -1,6 +1,14 @@
-use inkwell::{execution_engine::ExecutionEngine, context::Context, AddressSpace, values::{BasicValue, BasicValueEnum, AnyValueEnum, AnyValue}, OptimizationLevel, types::{BasicType, VoidType, AnyType, BasicTypeEnum}};
+use anyhow::anyhow;
+use inkwell::{
+    execution_engine::ExecutionEngine, 
+    context::Context, AddressSpace, 
+    values::{
+        BasicValue, BasicValueEnum, AnyValueEnum, AnyValue
+    }, 
+    OptimizationLevel
+};
 
-use super::ast::{Stmt, Expr, VariableValue, BinaryOp};
+use super::{ast::{Stmt, Expr, VariableValue, BinaryOp}, GLOBAL_ENTRY, USER_DEFINED_ENTRY};
 
 pub struct Compiler<'ctx> {
     pub context: &'ctx Context,
@@ -10,9 +18,6 @@ pub struct Compiler<'ctx> {
     execution_engine: ExecutionEngine<'ctx>,
     variables: std::collections::HashMap<String, VariableValue<'ctx>>,
 }   
-
-pub const GLOBAL_ENTRY : &str = "main";
-pub const USER_DEFINED_ENTRY : &str = "_main";
 
 impl<'ctx> Compiler<'ctx> {
     pub fn new(ctx: &'ctx Context) -> Compiler<'ctx> {
@@ -36,25 +41,6 @@ impl<'ctx> Compiler<'ctx> {
         self.add_printf();
         self.add_print_string_fn();
         self.add_printd();
-    }
-
-
-    pub fn get_runtime_args(&self) {
-        // lookup the entry point and get the args
-        let i32_type = self.context.i32_type();
-        let main_fn = self.module.get_function(GLOBAL_ENTRY).unwrap();
-        let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
-        let argv_1_ptr = unsafe {
-            self.builder.build_gep(
-                argv.get_type().get_context().i8_type().ptr_type(AddressSpace::default()),
-                argv, 
-                &[i32_type.const_int(1, false)], 
-                "argv_0_ptr")
-        };
-        let argv_0 = self.builder.build_load(
-            self.context.i8_type().ptr_type(AddressSpace::default()),
-            argv_1_ptr, 
-            "argv_0");
     }
 
     fn add_print_string_fn(&self) {
@@ -127,42 +113,45 @@ impl<'ctx> Compiler<'ctx> {
         let i8_ptr_type = self.context.i8_type().ptr_type(AddressSpace::default());
         let i32_type = self.context.i32_type();
         let fn_type = i32_type.fn_type(&[i32_type.into(), i8_ptr_type.ptr_type(AddressSpace::default()).into()], false);
-        
+        // add our main function
         let main_fn = self.module.add_function(GLOBAL_ENTRY, fn_type, None);
-
-
+        // create the entry block
         let entry = self.context.append_basic_block(main_fn, "entry");
         self.builder.position_at_end(entry);
 
-            // Store argc and argv as global variables
-        let argc_global = self.module.add_global(i32_type, Some(AddressSpace::default()),   "argc_global");
-        let argv_global = self.module.add_global(i8_ptr_type.ptr_type(AddressSpace::default()),     Some(AddressSpace::default()), "argv_global");
+        // Store argc and argv as global variables
+        let argc_global = self.module
+            .add_global(i32_type, Some(AddressSpace::default()),   "argc_global");
+        let argv_global = self.module
+            .add_global(
+                i8_ptr_type.ptr_type(AddressSpace::default()),     
+                Some(AddressSpace::default()), 
+                "argv_global"
+            );
 
         argc_global.set_initializer(&i32_type.const_zero()); // initialize with 0
         argv_global.set_initializer(&i8_ptr_type.const_null()); // initialize with null
 
         let argc = main_fn.get_nth_param(0).unwrap();
         let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
-
+        
+        // store argc and argv in global variables
         self.builder.build_store(argc_global.as_pointer_value(), argc);
         self.builder.build_store(argv_global.as_pointer_value(), argv);
-
+        
+        /* the return value is set is `link_user_main_to_entry` */
     }
 
     pub fn link_user_main_to_entry(&self) {
         let user_defined_main = self.module.get_function(USER_DEFINED_ENTRY)
         .expect("main function not found");
 
-        // change the user functions name
-
         // create a wrapper around user-defined main 
-        
+        let real_entry = self.module.get_function(GLOBAL_ENTRY)
+            .expect("_entry function not found");
 
-        let real_entry = self.module.get_function(GLOBAL_ENTRY).expect("_entry function not found");
         // add a new basic block to the entry function
-
         let blocks = real_entry.get_basic_blocks();
-
         if let Some(block) = blocks.first()  {
             self.builder.position_at_end(*block);
             // Call user-defined main with no args
@@ -174,19 +163,6 @@ impl<'ctx> Compiler<'ctx> {
             println!("[*] linked user-defined main to _entry");
             self.builder.build_return(Some(&self.context.i32_type().const_int(0, false)));
         }
-        /*
-        let entry = self.context.append_basic_block(real_entry, "entry");
-        self.builder.position_at_end(entry);
-        // Call user-defined main with no args
-
-        self.builder.build_call(
-            user_defined_main, 
-            &[], 
-            "user_main_call");
-
-        // Return 0 from main
-        self.builder.build_return(Some(&self.context.i32_type().const_int(0, false)));
-         */
     }
 
     fn compile_expr(&self, expr: &Expr) -> AnyValueEnum<'ctx> {
@@ -318,14 +294,13 @@ impl<'ctx> Compiler<'ctx> {
                     BinaryOp::Subtract => self.builder.build_int_sub(left_value, right_value, "subtmp").into(),
                     BinaryOp::Multiply => self.builder.build_int_mul(left_value, right_value, "multmp").into(),
                     BinaryOp::Divide => self.builder.build_int_signed_div(left_value, right_value, "divtmp").into(),
-                    //"%" => self.builder.build_int_signed_rem(left_value, right_value, "modtmp").into(),
                 }
             }
 
         }
     }
 
-    pub fn compile(&mut self, stmts: &[Stmt]) {
+    pub fn compile(&mut self, stmts: &[Stmt]) -> anyhow::Result<()> {
         for stmt in stmts {
             match stmt {
                 Stmt::Return(expr) => {
@@ -379,7 +354,7 @@ impl<'ctx> Compiler<'ctx> {
                                             .insert(var_name.clone(), VariableValue::Ptr(ptr_val));
                                     },
                                     // Add other types as necessary
-                                    _ => panic!("Unsupported assignment type for variable {}", var_name),
+                                    _ => return Err(anyhow!("Unsupported assignment type for variable {}", var_name)),
                                 }
                             },
                             Stmt::Return(expr) => {
@@ -394,7 +369,9 @@ impl<'ctx> Compiler<'ctx> {
                                         AnyValueEnum::PointerValue(p) => {
                                             self.builder.build_return(Some(&p));
                                         },
-                                        _ => panic!("Unknown return type: {:#?}", value),
+                                        _ => return Err(
+                                            anyhow!("Unknown return type: {:#?} | context: {:?}", value, expr)
+                                        ),
                                     }
                                 };
                             },
@@ -442,6 +419,7 @@ impl<'ctx> Compiler<'ctx> {
 
             }
         }
+        Ok(())
     }
 
     pub fn stdlib_call(&self, idents: &Vec<String>) -> anyhow::Result<BasicValueEnum<'ctx>> {
