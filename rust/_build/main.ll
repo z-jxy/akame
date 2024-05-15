@@ -38,11 +38,7 @@ entry:
 
 define i32 @_main() {
 entry:
-  %argv_val = load ptr, ptr @argv_global, align 8
-  %array_indexing = getelementptr ptr, ptr %argv_val, i32 1
-  %array_indexing_load = load ptr, ptr %array_indexing, align 8
-  call void @print(ptr %array_indexing_load)
-  %calltmp = call i32 @hello(i32 4)
+  %calltmp = call i32 @hello(i32 3)
   %calltmp1 = call i32 @printd(i32 %calltmp)
   ret i32 0
 }
