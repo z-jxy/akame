@@ -1,14 +1,14 @@
 mod akame_interpreter;
 mod llvm;
 mod parsers;
-mod utils;
 pub mod types;
+mod utils;
 
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::utils::find_it;
+use crate::utils::which_bin;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -30,7 +30,7 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// does testing things
+    /// Emit LLVM IR
     Emit {
         /// Source to emit LLVM IR from
         //#[arg(short, long, value_name = "FILE")]
@@ -44,6 +44,7 @@ enum Commands {
         #[arg(short, long, value_name = "bin/main")]
         out_dir: Option<PathBuf>,
     },
+    /// Parse source code file
     Parse {
         /// Source to parse
         //#[arg(short, long, value_name = "FILE")]
@@ -53,7 +54,7 @@ enum Commands {
         /// Source to parse
         //#[arg(short, long, value_name = "FILE")]
         file: PathBuf,
-    }
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -69,42 +70,44 @@ fn main() -> anyhow::Result<()> {
                         println!("AST: {:?}", ast);
                     }
                     llvm::emit(ast)?
-                },
+                }
                 Err(err) => {
                     println!("{:?}", err);
                     std::process::exit(1);
                 }
             }
-        },
+        }
         Some(Commands::Parse { file }) => {
             println!("[*] Parsing file: {}", file.display());
-            let script = std::fs::read_to_string(file.as_path()).expect("Something went wrong reading the file");
+            let script = std::fs::read_to_string(file.as_path())
+                .expect("Something went wrong reading the file");
             match akame_interpreter::parse(&script) {
                 Ok(ast) => {
                     println!("AST: {:#?}", ast);
-                },
+                }
                 Err(err) => {
                     println!("Error: {:?}", err);
                 }
             }
-        },
+        }
         Some(Commands::Compile { file, out_dir }) => {
             println!("[*] Compiling: {:?}", file);
-            let script = std::fs::read_to_string(file.as_path()).expect("Something went wrong reading the file");
+            let script = std::fs::read_to_string(file.as_path())
+                .expect("Something went wrong reading the file");
             match akame_interpreter::parse(&script) {
                 Ok(ast) => {
                     llvm::compile_ast(ast, out_dir)?;
-                },
+                }
                 Err(err) => {
                     println!("Error: {:?}", err);
                 }
             }
-        },
+        }
         Some(Commands::Test { file }) => {
             println!("[*] Testing: {:?}", file);
-            let res = find_it("clang");
+            let res = which_bin("clang");
             println!("clang: {:?}", res);
-        },
+        }
         None => {
             println!("No subcommand was used");
         }

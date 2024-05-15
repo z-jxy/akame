@@ -1,9 +1,13 @@
 use std::collections::HashMap;
 
-use crate::{ types::integer::Integer, parsers::parse_program, llvm::ast::{Stmt, Expr, BinaryOp}};
+use crate::{
+    llvm::ast::{BinaryOp, Expr, Stmt},
+    parsers::parse_program,
+    types::integer::Integer,
+};
 
 pub struct Interpreter {
-    symbol_table: HashMap<String, Value>,  // assuming all variables are i32 for simplicity
+    symbol_table: HashMap<String, Value>, // assuming all variables are i32 for simplicity
 }
 
 impl Interpreter {
@@ -23,12 +27,12 @@ impl Interpreter {
                         Err(err) => eprintln!("Interpreter error: {}", err),
                     }
                 });
-            },
+            }
             Err(err) => {
                 println!("{}", "=".repeat(80));
                 eprintln!("[Parser::parse] error: {}", err);
                 println!("{}", "=".repeat(80));
-            },
+            }
         }
     }
 
@@ -44,13 +48,13 @@ impl Interpreter {
                     }
                 }
                 Ok(result)
-            },
+            }
             Err(err) => {
                 println!("{}", "=".repeat(80));
                 eprintln!("[Parser::parse] error: {}", err);
                 println!("{}", "=".repeat(80));
                 Err(anyhow::anyhow!("Parser error: {}", err))
-            },
+            }
         }
     }
 
@@ -61,19 +65,19 @@ impl Interpreter {
                 let value = self.symbol_table.get(ident);
                 match value {
                     Some(value) => Ok(value.to_owned()),
-                    None =>{
+                    None => {
                         println!("Symbol table: {:?}", self.symbol_table);
                         Err(anyhow::anyhow!("Undefined variable: {}", ident))
-                    },
+                    }
                 }
-            },
+            }
             Expr::Array(array) => {
                 let mut values = Vec::new();
                 for expr in array {
                     values.push(self.visit_expr(expr)?);
                 }
                 Ok(Value::Array(values))
-            },
+            }
             Expr::ArrayIndexing(array, index) => {
                 let array = self.visit_expr(array)?;
                 let index = self.visit_expr(index)?;
@@ -84,12 +88,16 @@ impl Interpreter {
                             return Err(anyhow::anyhow!("Index out of bounds: {}", index));
                         }
                         Ok(array[index].to_owned())
-                    },
-                    _ => Err(anyhow::anyhow!("Invalid array indexing: {}[{}]", array, index)),
+                    }
+                    _ => Err(anyhow::anyhow!(
+                        "Invalid array indexing: {}[{}]",
+                        array,
+                        index
+                    )),
                 }
-            },
+            }
             Expr::QualifiedIdent(_) => todo!(),
-         
+
             Expr::Infix(left, op, right) => {
                 let left_value;
                 let right_value;
@@ -101,29 +109,36 @@ impl Interpreter {
                             let (left, right) = (left.clone(), right.clone());
                             return match op {
                                 BinaryOp::Add => Ok(Value::Number(left + right)),
-                                BinaryOp::Subtract=> Ok(Value::Number(left - right)),
+                                BinaryOp::Subtract => Ok(Value::Number(left - right)),
                                 BinaryOp::Multiply => Ok(Value::Number(left * right)),
                                 BinaryOp::Divide => Ok(Value::Number(left / right)),
                             };
-                        },
+                        }
                         (Value::Str(left), Value::Str(right)) => {
                             return match op {
-                                BinaryOp::Add => Ok(Value::Str(format!("{}{}", left, right).into())),
+                                BinaryOp::Add => {
+                                    Ok(Value::Str(format!("{}{}", left, right).into()))
+                                }
                                 _ => Err(anyhow::anyhow!("Unexpected operator: {}", op)),
                             };
-                        },
-                        _ => return Err(anyhow::anyhow!("Invalid operation: {} {} {}", left_value, op, right_value)),
+                        }
+                        _ => {
+                            return Err(anyhow::anyhow!(
+                                "Invalid operation: {} {} {}",
+                                left_value,
+                                op,
+                                right_value
+                            ))
+                        }
                     }
                 }
-            },
-           
+            }
+
             Expr::Char(c) => Ok(Value::Char(*c)),
             Expr::Str(s) => Ok(Value::Str(s.clone().into())),
-            Expr::Call(name, args) => {
-                match self.call_function(name.as_str(), args) {
-                    Ok(value) => Ok(value),
-                    Err(err) => Err(err),
-                }
+            Expr::Call(name, args) => match self.call_function(name.as_str(), args) {
+                Ok(value) => Ok(value),
+                Err(err) => Err(err),
             },
         }
     }
@@ -140,17 +155,23 @@ impl Interpreter {
                         Value::Str(s) => {
                             println!("{:?}", s);
                             Ok(Value::None)
-                        },
-                        Value::Number(n) => {  // Handle numbers
+                        }
+                        Value::Number(n) => {
+                            // Handle numbers
                             println!("{}", n);
                             Ok(Value::None)
-                        },
-                        x => Err(anyhow::anyhow!("Expected string argument to print. Got: {:?}", x)),
+                        }
+                        x => Err(anyhow::anyhow!(
+                            "Expected string argument to print. Got: {:?}",
+                            x
+                        )),
                     }
                 } else {
-                    Err(anyhow::anyhow!("print function expects at least one argument"))
+                    Err(anyhow::anyhow!(
+                        "print function expects at least one argument"
+                    ))
                 }
-            },
+            }
             _ => {
                 let symbol = self.symbol_table.get(name);
                 match symbol {
@@ -158,23 +179,27 @@ impl Interpreter {
                         match value.clone() {
                             Value::Function(params, body) => {
                                 if params.len() != args.len() {
-                                    return Err(anyhow::anyhow!("Expected {} arguments, got {}", params.len(), args.len()));
+                                    return Err(anyhow::anyhow!(
+                                        "Expected {} arguments, got {}",
+                                        params.len(),
+                                        args.len()
+                                    ));
                                 }
                                 // Create a new scope
                                 let old_env = self.symbol_table.clone();
 
                                 let ret = {
                                     // Bind arguments to parameters
-                                    params.iter().zip(args.iter().cloned()).for_each(|x | {
+                                    params.iter().zip(args.iter().cloned()).for_each(|x| {
                                         let (param, arg) = x;
                                         let arg_value = self.visit_expr(&arg);
                                         match arg_value {
                                             Ok(value) => {
                                                 self.symbol_table.insert(param.to_owned(), value);
-                                            },
+                                            }
                                             Err(err) => {
                                                 println!("Error: {}", err);
-                                            },
+                                            }
                                         }
                                     });
                                     // Execute the body
@@ -189,39 +214,38 @@ impl Interpreter {
 
                                 self.symbol_table = old_env;
 
-                                return Ok(Value::Return(Box::new(ret)))
-                            },
+                                return Ok(Value::Return(Box::new(ret)));
+                            }
                             Value::None => Ok(Value::None),
-                            _ => todo!("Not a function: {}", name)
+                            _ => todo!("Not a function: {}", name),
                         }
-                    },
+                    }
                     None => Err(anyhow::anyhow!("Undefined function: {}", name)),
                 }
-            },
+            }
         }
     }
-
 
     fn visit_stmt(&mut self, stmt: &Stmt) -> anyhow::Result<Value> {
         match stmt {
-            Stmt::Assignment{ident, expr } => {
+            Stmt::Assignment { ident, expr } => {
                 let value = self.visit_expr(&expr)?;
                 self.symbol_table.insert(ident.clone(), value.clone());
                 Ok(value)
-            },
-            Stmt::Expression(expr) 
-            | Stmt::Return(expr) => {
-                Ok(self.visit_expr(&expr)?)
-            },
-            Stmt::FunctionDeclaration{ ident, params, body } => {
+            }
+            Stmt::Expression(expr) | Stmt::Return(expr) => Ok(self.visit_expr(&expr)?),
+            Stmt::FunctionDeclaration {
+                ident,
+                params,
+                body,
+            } => {
                 let value: Value = Value::Function(params.to_owned(), body.to_owned());
                 self.symbol_table.insert(ident.to_owned(), value.to_owned());
                 Ok(Value::None)
-            },
+            }
         }
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -232,7 +256,6 @@ pub enum Value {
     Return(Box<Value>),
     Array(Vec<Value>),
     None,
-
     // You can add more types here in future.
 }
 
@@ -243,18 +266,23 @@ impl std::fmt::Display for Value {
             Value::Number(n) => write!(f, "{}", n),
             Value::Str(s) => write!(f, "{}", s),
             Value::Char(c) => write!(f, "{}", c),
-            Value::Function(
-                params,
-                body,
-            ) => write!(f, "fn({}) {{\n{}\n}}", params.join(", "), body.iter().map(|stmt| {
-                if let Stmt::Expression(expr) = stmt {
-                    format!("{:?}", expr)
-                } else {
-                    format!("{:?}", stmt)
-                }
-            }).collect::<Vec<String>>().join("\n")),
+            Value::Function(params, body) => write!(
+                f,
+                "fn({}) {{\n{}\n}}",
+                params.join(", "),
+                body.iter()
+                    .map(|stmt| {
+                        if let Stmt::Expression(expr) = stmt {
+                            format!("{:?}", expr)
+                        } else {
+                            format!("{:?}", stmt)
+                        }
+                    })
+                    .collect::<Vec<String>>()
+                    .join("\n")
+            ),
             Value::None => Ok(()),
-            Value::Return(_) => Ok(()),
+            Value::Return(boxed_value) => write!(f, "{}", boxed_value),
             Value::Array(values) => {
                 write!(f, "[")?;
                 for (i, value) in values.iter().enumerate() {
@@ -264,8 +292,7 @@ impl std::fmt::Display for Value {
                     write!(f, "{}", value)?;
                 }
                 write!(f, "]")
-            },
+            }
         }
     }
 }
-
