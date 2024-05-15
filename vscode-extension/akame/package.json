@@ -1,0 +1,25 @@
+{
+  "name": "akame",
+  "displayName": "akame",
+  "description": "Syntax highlighting for akame",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.81.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "akame",
+      "aliases": ["akame", "akame"],
+      "extensions": [".ak",".k"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "akame",
+      "scopeName": "source.akame",
+      "path": "./syntaxes/akame.tmLanguage.json"
+    }]
+  }
+}
