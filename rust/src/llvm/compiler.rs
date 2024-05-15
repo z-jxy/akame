@@ -52,6 +52,7 @@ impl<'ctx> Compiler<'ctx> {
 
     // implementations for some stdlib functions we're going to make available
     fn add_stdlib(&self) {
+        // TODO: lets make a safer wrapper around printf
         self.add_printf();
         self.add_print_string_fn();
         self.add_printd();
