@@ -1,12 +1,15 @@
-use crate::{ parsers::parse_program, llvm::ast::Ast};
+use std::path::PathBuf;
+
+use crate::{llvm::ast::Ast, parsers::parse_program};
 
 pub mod interpreter;
 pub mod repl;
 
-#[allow(dead_code)]
-pub fn run_script(script: &str) {
+/// Takes a path to a source file and executes it in the interpreter
+pub fn run_script(script: &PathBuf) {
     let mut interpreter = interpreter::Interpreter::new();
-    interpreter.eval_source(script);
+    let src = std::fs::read_to_string(script).expect("Could not read file");
+    interpreter.eval_source(&src);
 }
 
 pub fn parse(script: &str) -> anyhow::Result<Ast> {

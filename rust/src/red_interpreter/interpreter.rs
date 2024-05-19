@@ -1,4 +1,9 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
+
+use tracing::debug;
 
 use crate::{
     llvm::ast::{BinaryOp, Expr, Stmt},
@@ -20,13 +25,14 @@ impl Interpreter {
     pub fn eval_source(&mut self, script: &str) {
         match parse_program(&script) {
             Ok(parsed_program) => {
-                parsed_program.iter().for_each(|stmt| {
-                    match self.visit_stmt(stmt) {
-                        // we don't print anything since
-                        Ok(_) => (),
+                parsed_program
+                    .iter()
+                    .for_each(|stmt| match self.visit_stmt(stmt) {
+                        Ok(value) => {
+                            println!("=> {}", value);
+                        }
                         Err(err) => eprintln!("Interpreter error: {}", err),
-                    }
-                });
+                    });
             }
             Err(err) => {
                 println!("{}", "=".repeat(80));
@@ -66,7 +72,7 @@ impl Interpreter {
                 match value {
                     Some(value) => Ok(value.to_owned()),
                     None => {
-                        println!("Symbol table: {:?}", self.symbol_table);
+                        debug!("Symbol table: {:?}", self.symbol_table);
                         Err(anyhow::anyhow!("Undefined variable: {}", ident))
                     }
                 }

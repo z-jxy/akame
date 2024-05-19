@@ -7,6 +7,8 @@ mod utils;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
 
 use crate::utils::which_bin;
 
@@ -21,7 +23,7 @@ struct Args {
     file: Option<PathBuf>,
 
     /// Turn debugging information on
-    #[arg(short, long, action = clap::ArgAction::Count)]
+    #[arg(short, long, action = clap::ArgAction::Count, default_value_t = 0)]
     debug: u8,
 
     #[command(subcommand)]
@@ -55,10 +57,32 @@ enum Commands {
         //#[arg(short, long, value_name = "FILE")]
         file: PathBuf,
     },
+    Run {
+        /// Source to parse
+        //#[arg(short, long, value_name = "FILE")]
+        file: PathBuf,
+    },
+    Repl,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+
+    let tracing_level = match args.debug {
+        0 => Level::INFO,
+        1 => Level::DEBUG,
+        2 => Level::TRACE,
+        _ => Level::TRACE,
+    };
+
+    let subscriber = FmtSubscriber::builder()
+        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
+        // will be written to stdout.
+        .with_max_level(tracing_level)
+        // completes the builder.
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
     match args.command {
         Some(Commands::Emit { file }) => {
             println!("[*] Emitting IR for file: {}", file.display());
@@ -107,6 +131,14 @@ fn main() -> anyhow::Result<()> {
             println!("[*] Testing: {:?}", file);
             let res = which_bin("clang");
             println!("clang: {:?}", res);
+        }
+        Some(Commands::Run { file }) => {
+            red_interpreter::run_script(&file);
+        }
+        Some(Commands::Repl) => {
+            if let Err(e) = red_interpreter::repl::interactive() {
+                eprintln!("{:?}", e);
+            }
         }
         None => {
             println!("No subcommand was used");
