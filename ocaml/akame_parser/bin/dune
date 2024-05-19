@@ -1,4 +1,0 @@
-(executable
- (public_name akame_parser)
- (name main)
- (libraries akame_parser))

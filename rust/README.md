@@ -1,4 +1,4 @@
-# Akame
+# Red
 
 ## Builtin Functions
 

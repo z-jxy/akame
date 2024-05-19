@@ -1,6 +1,6 @@
-# Akame
+# Red
 
-Akame is a programming lanugage I made to learn more about compilers and LLVM
+Red is a programming lanugage I made to learn more about compilers and LLVM
 
 There's no release for the compiler, so you will need cargo to build it. You can install it here: https://www.rust-lang.org/tools/install
 

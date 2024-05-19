@@ -1,6 +1,6 @@
-mod akame_interpreter;
 mod llvm;
 mod parsers;
+mod red_interpreter;
 pub mod types;
 mod utils;
 
@@ -64,7 +64,7 @@ fn main() -> anyhow::Result<()> {
             println!("[*] Emitting IR for file: {}", file.display());
             let script = std::fs::read_to_string(file.as_path())
                 .expect("Something went wrong reading the input file");
-            match akame_interpreter::parse(&script) {
+            match red_interpreter::parse(&script) {
                 Ok(ast) => {
                     if args.debug > 0 {
                         println!("AST: {:?}", ast);
@@ -81,7 +81,7 @@ fn main() -> anyhow::Result<()> {
             println!("[*] Parsing file: {}", file.display());
             let script = std::fs::read_to_string(file.as_path())
                 .expect("Something went wrong reading the file");
-            match akame_interpreter::parse(&script) {
+            match red_interpreter::parse(&script) {
                 Ok(ast) => {
                     println!("AST: {:#?}", ast);
                 }
@@ -94,7 +94,7 @@ fn main() -> anyhow::Result<()> {
             println!("[*] Compiling: {:?}", file);
             let script = std::fs::read_to_string(file.as_path())
                 .expect("Something went wrong reading the file");
-            match akame_interpreter::parse(&script) {
+            match red_interpreter::parse(&script) {
                 Ok(ast) => {
                     llvm::compile_ast(ast, out_dir)?;
                 }
